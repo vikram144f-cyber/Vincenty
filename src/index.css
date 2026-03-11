@@ -1,0 +1,121 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 25% 5%;
+    --foreground: 210 20% 92%;
+
+    --card: 220 20% 9%;
+    --card-foreground: 210 20% 92%;
+
+    --popover: 220 20% 9%;
+    --popover-foreground: 210 20% 92%;
+
+    --primary: 200 95% 55%;
+    --primary-foreground: 220 25% 5%;
+
+    --secondary: 220 18% 13%;
+    --secondary-foreground: 210 20% 85%;
+
+    --muted: 220 18% 12%;
+    --muted-foreground: 215 15% 50%;
+
+    --accent: 160 75% 48%;
+    --accent-foreground: 220 25% 5%;
+
+    --destructive: 0 75% 55%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 18% 16%;
+    --input: 220 18% 16%;
+    --ring: 200 95% 55%;
+
+    --radius: 0.5rem;
+
+    /* Custom tokens */
+    --hud-bg: 220 25% 5% / 0.88;
+    --hud-border: 200 50% 25%;
+    --cost-high: 0 80% 55%;
+    --cost-medium: 38 95% 55%;
+    --cost-low: 200 80% 55%;
+    --path-color: 160 75% 55%;
+    --glow-primary: 0 0 24px hsl(200 95% 55% / 0.25), inset 0 0 12px hsl(200 95% 55% / 0.05);
+    --glow-accent: 0 0 20px hsl(160 75% 48% / 0.3);
+
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-display);
+  }
+}
+
+@layer components {
+  .hud-panel {
+    @apply rounded-lg border backdrop-blur-xl;
+    background: hsl(var(--hud-bg));
+    border-color: hsl(var(--hud-border));
+    box-shadow: var(--glow-primary);
+  }
+
+  .hud-label {
+    @apply text-[10px] font-medium uppercase tracking-[0.15em];
+    font-family: var(--font-mono);
+    color: hsl(var(--muted-foreground));
+  }
+
+  .hud-value {
+    @apply text-sm font-semibold;
+    font-family: var(--font-mono);
+    color: hsl(var(--primary));
+  }
+
+  .hud-button {
+    @apply px-4 py-2.5 rounded-md text-xs font-medium transition-all duration-300 border cursor-pointer;
+    font-family: var(--font-mono);
+    background: hsl(var(--secondary));
+    border-color: hsl(var(--border));
+    color: hsl(var(--secondary-foreground));
+    letter-spacing: 0.05em;
+  }
+  .hud-button:hover {
+    background: hsl(var(--muted));
+    border-color: hsl(var(--primary));
+    box-shadow: var(--glow-primary);
+    color: hsl(var(--primary));
+  }
+  .hud-button.active {
+    background: hsl(var(--primary) / 0.12);
+    border-color: hsl(var(--primary));
+    color: hsl(var(--primary));
+    box-shadow: var(--glow-primary);
+  }
+
+  .cost-high { color: hsl(var(--cost-high)); }
+  .cost-medium { color: hsl(var(--cost-medium)); }
+  .cost-low { color: hsl(var(--cost-low)); }
+
+  .bg-cost-high { background-color: hsl(var(--cost-high)); }
+  .bg-cost-medium { background-color: hsl(var(--cost-medium)); }
+  .bg-cost-low { background-color: hsl(var(--cost-low)); }
+}
