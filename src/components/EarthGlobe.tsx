@@ -12,47 +12,122 @@ interface EarthGlobeProps {
   weatherTime: number;
 }
 
-function createWeatherOverlayTexture(zones: WeatherZone[], time: number): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d')!;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+// ─── Weather Overlay via GPU Shader (zero per-frame allocations) ─────────────
+//
+// The old approach (createWeatherOverlayTexture) created a new 1024×512 HTML
+// Canvas + THREE.CanvasTexture every single frame, uploading ~2 MB of pixel
+// data to the GPU each tick and immediately abandoning the previous texture.
+// This caused a progressive GPU memory leak.
+//
+// The new approach encodes all zone data as shader uniforms that are mutated
+// in-place each frame (no allocations).  The fragment shader computes the
+// same storm-blob visualisation entirely on the GPU.
 
-  for (const zone of zones) {
-    const driftLng = zone.lng + Math.sin(time * 0.3 + zone.lat * 0.1) * 3;
-    const driftLat = zone.lat + Math.cos(time * 0.2 + zone.lng * 0.05) * 1.5;
+const MAX_ZONES = 12; // must match the GLSL constant below
 
-    const x = ((driftLng + 180) / 360) * canvas.width;
-    const y = ((90 - driftLat) / 180) * canvas.height;
-    const pulseScale = 1 + Math.sin(time * 2 + zone.intensity) * 0.15;
-    const r = zone.radius * 300 * pulseScale;
+const weatherVertexShader = `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
 
-    const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-    const alpha = zone.intensity / 5;
+const weatherFragmentShader = `
+  precision mediump float;
 
-    if (zone.intensity > 3.5) {
-      grad.addColorStop(0, `rgba(255, 40, 40, ${alpha * 0.75})`);
-      grad.addColorStop(0.3, `rgba(255, 80, 20, ${alpha * 0.5})`);
-      grad.addColorStop(0.6, `rgba(255, 120, 30, ${alpha * 0.25})`);
-      grad.addColorStop(1, 'rgba(255, 120, 30, 0)');
-    } else if (zone.intensity > 2) {
-      grad.addColorStop(0, `rgba(255, 200, 40, ${alpha * 0.65})`);
-      grad.addColorStop(0.4, `rgba(255, 170, 60, ${alpha * 0.35})`);
-      grad.addColorStop(1, 'rgba(255, 180, 80, 0)');
-    } else {
-      grad.addColorStop(0, `rgba(60, 160, 255, ${alpha * 0.5})`);
-      grad.addColorStop(1, 'rgba(60, 160, 255, 0)');
-    }
+  #define MAX_ZONES ${MAX_ZONES}
 
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  uniform float  uTime;
+  uniform int    uZoneCount;
+  uniform float  uZoneLat[MAX_ZONES];
+  uniform float  uZoneLng[MAX_ZONES];
+  uniform float  uZoneRadius[MAX_ZONES];
+  uniform float  uZoneIntensity[MAX_ZONES];
+
+  varying vec2 vUv;
+
+  // Convert UV (equirectangular) to lat/lng in degrees.
+  vec2 uvToLatLng(vec2 texCoord) {
+    float lng = texCoord.x * 360.0 - 180.0;
+    float lat = 90.0 - texCoord.y * 180.0;
+    return vec2(lat, lng);
   }
 
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.ClampToEdgeWrapping;
-  return tex;
+  // Haversine distance on unit sphere, both inputs in degrees.
+  float haversine(float lat1, float lng1, float lat2, float lng2) {
+    float dLat = radians(lat2 - lat1);
+    float dLng = radians(lng2 - lng1);
+    float a = sin(dLat * 0.5) * sin(dLat * 0.5)
+            + cos(radians(lat1)) * cos(radians(lat2))
+            * sin(dLng * 0.5) * sin(dLng * 0.5);
+    return 2.0 * asin(sqrt(clamp(a, 0.0, 1.0)));
+  }
+
+  void main() {
+    vec2 latLng = uvToLatLng(vUv);
+    vec4 color  = vec4(0.0);
+
+    for (int i = 0; i < MAX_ZONES; i++) {
+      if (i >= uZoneCount) break;
+
+      // Gentle drift — mirrors createWeatherOverlayTexture's driftLng/driftLat
+      float driftLng = uZoneLng[i] + sin(uTime * 0.3 + uZoneLat[i] * 0.1) * 3.0;
+      float driftLat = uZoneLat[i] + cos(uTime * 0.2 + uZoneLng[i] * 0.05) * 1.5;
+
+      float d   = haversine(latLng.x, latLng.y, driftLat, driftLng);
+      float r   = uZoneRadius[i] * (1.0 + sin(uTime * 2.0 + uZoneIntensity[i]) * 0.15);
+
+      if (d >= r) continue;
+
+      float t      = 1.0 - d / r;             // 0 = edge, 1 = centre
+      float alpha  = uZoneIntensity[i] / 5.0;
+
+      vec3 stormColor;
+      if (uZoneIntensity[i] > 3.5) {
+        // Severe — red
+        stormColor = mix(vec3(1.0, 0.47, 0.12), vec3(1.0, 0.16, 0.16), t);
+        alpha *= mix(0.25, 0.75, t);
+      } else if (uZoneIntensity[i] > 2.0) {
+        // Moderate — amber
+        stormColor = mix(vec3(1.0, 0.71, 0.31), vec3(1.0, 0.78, 0.16), t);
+        alpha *= mix(0.15, 0.65, t);
+      } else {
+        // Light — blue
+        stormColor = vec3(0.24, 0.63, 1.0);
+        alpha *= mix(0.0, 0.50, t);
+      }
+
+      // Additive blending — matches THREE.AdditiveBlending on the mesh
+      color.rgb += stormColor * alpha;
+      color.a    = clamp(color.a + alpha, 0.0, 1.0);
+    }
+
+    gl_FragColor = color;
+  }
+`;
+
+/** Build a single long-lived weather ShaderMaterial.  Uniforms are updated
+ *  in-place each frame — no garbage objects are ever created. */
+function buildWeatherMaterial(zones: WeatherZone[]): THREE.ShaderMaterial {
+  const count = Math.min(zones.length, MAX_ZONES);
+  const pad   = (arr: number[]) => { while (arr.length < MAX_ZONES) arr.push(0); return arr; };
+
+  return new THREE.ShaderMaterial({
+    vertexShader:   weatherVertexShader,
+    fragmentShader: weatherFragmentShader,
+    transparent: true,
+    depthWrite:  false,
+    blending:    THREE.AdditiveBlending,
+    uniforms: {
+      uTime:          { value: 0 },
+      uZoneCount:     { value: count },
+      uZoneLat:       { value: pad(zones.slice(0, MAX_ZONES).map(z => z.lat)) },
+      uZoneLng:       { value: pad(zones.slice(0, MAX_ZONES).map(z => z.lng)) },
+      uZoneRadius:    { value: pad(zones.slice(0, MAX_ZONES).map(z => z.radius)) },
+      uZoneIntensity: { value: pad(zones.slice(0, MAX_ZONES).map(z => z.intensity)) },
+    },
+  });
 }
 
 // Day/night shader with real textures
@@ -125,17 +200,16 @@ const atmosphereFragmentShader = `
 `;
 
 export function EarthGlobe({ onPointClick, showWeather, weatherZones, weatherTime }: EarthGlobeProps) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const cloudRef = useRef<THREE.Mesh>(null);
+  const meshRef    = useRef<THREE.Mesh>(null);
+  const cloudRef   = useRef<THREE.Mesh>(null);
   const weatherRef = useRef<THREE.Mesh>(null);
-  const weatherMatRef = useRef<THREE.MeshBasicMaterial>(null);
 
   // Load real textures
-  const dayTexture = useLoader(THREE.TextureLoader, '/textures/earth-blue-marble.jpg');
-  const nightTexture = useLoader(THREE.TextureLoader, '/textures/earth-night.jpg');
-  const bumpTexture = useLoader(THREE.TextureLoader, '/textures/earth-bump.png');
+  const dayTexture      = useLoader(THREE.TextureLoader, '/textures/earth-blue-marble.jpg');
+  const nightTexture    = useLoader(THREE.TextureLoader, '/textures/earth-night.jpg');
+  const bumpTexture     = useLoader(THREE.TextureLoader, '/textures/earth-bump.png');
   const specularTexture = useLoader(THREE.TextureLoader, '/textures/earth-specular.png');
-  const cloudTexture = useLoader(THREE.TextureLoader, '/textures/earth-clouds.png');
+  const cloudTexture    = useLoader(THREE.TextureLoader, '/textures/earth-clouds.png');
 
   const sunDirection = useMemo(() => new THREE.Vector3(5, 3, 5).normalize(), []);
 
@@ -144,45 +218,68 @@ export function EarthGlobe({ onPointClick, showWeather, weatherZones, weatherTim
       vertexShader: earthVertexShader,
       fragmentShader: earthFragmentShader,
       uniforms: {
-        dayTexture: { value: dayTexture },
-        nightTexture: { value: nightTexture },
-        bumpTexture: { value: bumpTexture },
+        dayTexture:      { value: dayTexture },
+        nightTexture:    { value: nightTexture },
+        bumpTexture:     { value: bumpTexture },
         specularTexture: { value: specularTexture },
-        sunDirection: { value: sunDirection },
+        sunDirection:    { value: sunDirection },
       },
     });
   }, [dayTexture, nightTexture, bumpTexture, specularTexture, sunDirection]);
 
   const atmosphereMaterial = useMemo(() => {
     return new THREE.ShaderMaterial({
-      vertexShader: atmosphereVertexShader,
+      vertexShader:   atmosphereVertexShader,
       fragmentShader: atmosphereFragmentShader,
-      blending: THREE.AdditiveBlending,
-      side: THREE.BackSide,
+      blending:    THREE.AdditiveBlending,
+      side:        THREE.BackSide,
       transparent: true,
-      depthWrite: false,
+      depthWrite:  false,
     });
   }, []);
 
+  // ── Weather ShaderMaterial (created once per zone-set change) ─────────
+  // buildWeatherMaterial constructs a ShaderMaterial whose uniform arrays
+  // are pre-sized to MAX_ZONES.  In useFrame we only mutate the uTime
+  // uniform value — no new objects are ever allocated per frame.
+  const weatherMaterial = useMemo(
+    () => (showWeather ? buildWeatherMaterial(weatherZones) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [showWeather, weatherZones],
+  );
+
   useFrame(() => {
-    if (meshRef.current) {
-      meshRef.current.rotation.y += 0.0003;
-    }
     if (cloudRef.current) {
-      cloudRef.current.rotation.y = (meshRef.current?.rotation.y || 0) + weatherTime * 0.002;
+      cloudRef.current.rotation.y = weatherTime * 0.002;
     }
-    if (weatherRef.current) {
-      weatherRef.current.rotation.y = meshRef.current?.rotation.y || 0;
-    }
-    if (showWeather && weatherMatRef.current) {
-      const newTex = createWeatherOverlayTexture(weatherZones, weatherTime);
-      weatherMatRef.current.map = newTex;
-      weatherMatRef.current.needsUpdate = true;
+    // ─── GPU weather animation: mutate only uTime — zero allocations ────
+    // Previously this called createWeatherOverlayTexture() every frame,
+    // allocating a ~2 MB Canvas + CanvasTexture and abandoning the previous
+    // one, causing a progressive GPU VRAM leak.
+    if (showWeather && weatherMaterial) {
+      weatherMaterial.uniforms.uTime.value = weatherTime;
     }
   });
 
+  const pointerDownPos = useRef<{ x: number; y: number } | null>(null);
+
+  const handlePointerDown = useCallback((e: ThreeEvent<PointerEvent>) => {
+    pointerDownPos.current = { x: e.clientX, y: e.clientY };
+  }, []);
+
   const handleClick = useCallback((e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
+    
+    // Drag vs Click threshold
+    if (pointerDownPos.current) {
+      const dx = e.clientX - pointerDownPos.current.x;
+      const dy = e.clientY - pointerDownPos.current.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance > 5) {
+        return; // User dragged, ignore the click
+      }
+    }
+
     const point = e.point;
     if (!meshRef.current) return;
     const localPoint = meshRef.current.worldToLocal(point.clone());
@@ -190,12 +287,10 @@ export function EarthGlobe({ onPointClick, showWeather, weatherZones, weatherTim
     onPointClick(lat, lng);
   }, [onPointClick]);
 
-  const initialWeatherTex = useMemo(() => createWeatherOverlayTexture(weatherZones, 0), [weatherZones]);
-
   return (
     <group>
       {/* Earth with day/night shader */}
-      <mesh ref={meshRef} onClick={handleClick} material={earthMaterial}>
+      <mesh ref={meshRef} onPointerDown={handlePointerDown} onClick={handleClick} material={earthMaterial}>
         <sphereGeometry args={[EARTH_RADIUS, 128, 128]} />
       </mesh>
 
@@ -240,17 +335,11 @@ export function EarthGlobe({ onPointClick, showWeather, weatherZones, weatherTim
         />
       </mesh>
 
-      {/* Weather overlay */}
-      {showWeather && (
+      {/* Weather overlay — GPU ShaderMaterial, zero per-frame allocations */}
+      {showWeather && weatherMaterial && (
         <mesh ref={weatherRef}>
           <sphereGeometry args={[EARTH_RADIUS * 1.006, 64, 64]} />
-          <meshBasicMaterial
-            ref={weatherMatRef}
-            map={initialWeatherTex}
-            transparent
-            opacity={0.85}
-            depthWrite={false}
-          />
+          <primitive object={weatherMaterial} attach="material" />
         </mesh>
       )}
     </group>

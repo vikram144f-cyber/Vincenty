@@ -65,6 +65,7 @@ class ComputationMetrics(BaseModel):
     nodes_explored: int
     computation_time_ms: float
     grid_size: str
+    formula_used: Optional[str] = "haversine"
 
 
 class FlightStats(BaseModel):
@@ -93,6 +94,7 @@ class PathCalculateResponse(BaseModel):
     metrics: ComputationMetrics
     status: str = "ok"
     message: Optional[str] = None
+    cache_hit: bool = False
 
 
 class PathErrorResponse(BaseModel):
@@ -151,3 +153,44 @@ class RouteHistoryItem(BaseModel):
 class RouteHistoryResponse(BaseModel):
     routes: list[RouteHistoryItem]
     total: int
+
+
+# ─── New Modular API Sprint ──────────────────────────────────────────
+
+class FlightRouteRequest(BaseModel):
+    origin: Coordinate
+    destination: Coordinate
+    aircraft_speed_kmh: Optional[float] = Field(
+        default=903.0, ge=100.0, le=3000.0,
+        description="Aircraft cruise speed in km/h. Default: Boeing 787-9 (903 km/h)."
+    )
+    num_waypoints: Optional[int] = Field(
+        default=100, ge=2, le=5000,
+        description="Number of intermediate waypoints to generate."
+    )
+
+
+class WaypointOut(BaseModel):
+    lat: float
+    lng: float
+    distance_from_start_km: float
+
+
+class FlightRouteResponse(BaseModel):
+    distance_km: float
+    estimated_duration_hours: float
+    aircraft_speed_kmh: float
+    num_waypoints: int
+    path_coordinates: list[WaypointOut]
+    formula: str
+    computation_time_ms: float
+    cache_hit: bool
+    max_range_km: float = Field(14140.0, description="Aircraft maximum range in km")
+    within_range: bool = Field(True, description="Whether the route is within aircraft range")
+
+
+class ErrorDetail(BaseModel):
+    """Structured error response for the flight-route API."""
+    error_code: str = Field(..., description="Machine-readable error code")
+    message: str = Field(..., description="Human-readable error description")
+    details: Optional[dict] = None

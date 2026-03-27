@@ -108,7 +108,7 @@ export function HUD({
           {/* Backend status indicator */}
           <div className="flex items-center gap-1.5 ml-2 pl-3 border-l" style={{ borderColor: 'hsl(var(--border))' }}>
             <div
-              className={`w-2 h-2 rounded-full ${backendAvailable === true
+              className={`w-2 h-2 rounded-full transition-colors duration-500 ${backendAvailable === true
                   ? 'bg-accent'
                   : backendAvailable === false
                     ? 'bg-destructive'
@@ -127,7 +127,7 @@ export function HUD({
       </div>
 
       {/* Left panel */}
-      <div className="absolute top-20 left-4 w-72 space-y-3 pointer-events-auto max-h-[calc(100vh-120px)] overflow-y-auto scrollbar-thin">
+      <div className="absolute top-20 left-4 w-72 space-y-3 pointer-events-auto max-h-[calc(100vh-120px)] overflow-y-auto scrollbar-thin hud-left-panel">
         {/* Route */}
         <div className="hud-panel p-4 space-y-3">
           <div className="hud-label flex items-center gap-2">
@@ -138,7 +138,7 @@ export function HUD({
           <div className="space-y-1.5">
             <label className="hud-label text-[9px]">Origin</label>
             <select
-              className="w-full bg-secondary border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all"
+              className="w-full bg-secondary border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all duration-300"
               value={selectedStart || ''}
               onChange={(e) => onSelectStart(e.target.value)}
             >
@@ -152,7 +152,7 @@ export function HUD({
               ))}
             </select>
             {selectedStartCity && (
-              <div className="text-[9px] font-mono text-muted-foreground">
+              <div className="text-[9px] font-mono text-muted-foreground transition-opacity duration-300">
                 {selectedStartCity.iata} · {selectedStartCity.lat.toFixed(2)}°N, {Math.abs(selectedStartCity.lng).toFixed(2)}°{selectedStartCity.lng >= 0 ? 'E' : 'W'}
               </div>
             )}
@@ -161,7 +161,7 @@ export function HUD({
           <div className="space-y-1.5">
             <label className="hud-label text-[9px]">Destination</label>
             <select
-              className="w-full bg-secondary border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all"
+              className="w-full bg-secondary border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30 transition-all duration-300"
               value={selectedEnd || ''}
               onChange={(e) => onSelectEnd(e.target.value)}
             >
@@ -175,7 +175,7 @@ export function HUD({
               ))}
             </select>
             {selectedEndCity && (
-              <div className="text-[9px] font-mono text-muted-foreground">
+              <div className="text-[9px] font-mono text-muted-foreground transition-opacity duration-300">
                 {selectedEndCity.iata} · {selectedEndCity.lat.toFixed(2)}°N, {Math.abs(selectedEndCity.lng).toFixed(2)}°{selectedEndCity.lng >= 0 ? 'E' : 'W'}
               </div>
             )}
@@ -257,10 +257,9 @@ export function HUD({
               {routeHistory.slice(0, 8).map((route) => (
                 <div
                   key={route.id}
-                  className="p-2 rounded-md cursor-pointer transition-all hover:border-primary"
+                  className="p-2 rounded-md cursor-pointer transition-all duration-300 hover:border-primary hover:shadow-[0_0_12px_hsl(200_95%_55%/0.15)]"
                   style={{ background: 'hsl(var(--secondary))', border: '1px solid hsl(var(--border))' }}
                   onClick={() => {
-                    // Load the saved route endpoints
                     onSelectStart(route.start_city);
                     onSelectEnd(route.end_city);
                   }}
@@ -291,10 +290,10 @@ export function HUD({
       </div>
 
       {/* Right panel — Flight Dashboard */}
-      <div className="absolute top-20 right-4 w-80 space-y-3 pointer-events-auto max-h-[calc(100vh-120px)] overflow-y-auto scrollbar-thin">
-        {/* Computing indicator */}
+      <div className="absolute top-20 right-4 w-80 space-y-3 pointer-events-auto max-h-[calc(100vh-120px)] overflow-y-auto scrollbar-thin hud-right-panel">
+        {/* Computing indicator with skeleton loader */}
         {isComputing && (
-          <div className="hud-panel p-4 space-y-2">
+          <div className="hud-panel p-4 space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-3 h-3 rounded-full bg-primary animate-pulse" />
               <div>
@@ -302,19 +301,20 @@ export function HUD({
                   COMPUTING PATH…
                 </div>
                 <div className="text-[9px] font-mono text-muted-foreground">
-                  A* pathfinding on server
+                  A* pathfinding with Vincenty precision
                 </div>
               </div>
             </div>
-            <div className="h-1 rounded-full overflow-hidden" style={{ background: 'hsl(var(--secondary))' }}>
-              <div
-                className="h-full rounded-full animate-pulse"
-                style={{
-                  background: 'hsl(var(--primary))',
-                  width: '60%',
-                  animation: 'pulse 1s ease-in-out infinite',
-                }}
-              />
+            <div className="progress-indeterminate" />
+            {/* Skeleton loaders for flight data */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="skeleton h-16 rounded-md" />
+              <div className="skeleton h-16 rounded-md" />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="skeleton h-12 rounded-md" />
+              <div className="skeleton h-12 rounded-md" />
+              <div className="skeleton h-12 rounded-md" />
             </div>
           </div>
         )}
@@ -340,7 +340,7 @@ export function HUD({
         )}
 
         {/* Flight Comparison Dashboard */}
-        {flightStats && (
+        {flightStats && !isComputing && (
           <div className="hud-panel p-4 space-y-3">
             <div className="hud-label flex items-center gap-2">
               <span className="inline-block w-1.5 h-1.5 bg-accent rounded-full" />
@@ -360,14 +360,14 @@ export function HUD({
 
             {/* Route comparison */}
             <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1 p-2.5 rounded-md" style={{ background: 'hsl(var(--secondary))' }}>
+              <div className="space-y-1 p-2.5 rounded-md transition-all duration-300" style={{ background: 'hsl(var(--secondary))' }}>
                 <span className="text-[8px] font-mono text-muted-foreground uppercase tracking-wider block">Geodesic</span>
                 <div className="hud-value text-sm">{flightStats.geodesicKm.toLocaleString()} km</div>
                 <div className="text-[9px] font-mono text-muted-foreground">{flightStats.geodesicHours}h flight</div>
               </div>
-              <div className="space-y-1 p-2.5 rounded-md border" style={{ background: 'hsl(var(--primary) / 0.05)', borderColor: 'hsl(var(--primary) / 0.2)' }}>
+              <div className="space-y-1 p-2.5 rounded-md border transition-all duration-300" style={{ background: 'hsl(var(--primary) / 0.05)', borderColor: 'hsl(var(--primary) / 0.2)' }}>
                 <span className="text-[8px] font-mono text-muted-foreground uppercase tracking-wider block">
-                  Optimized <span className="text-cost-medium">+{flightStats.detourPercent}%</span>
+                  Optimized <span className="cost-medium">+{flightStats.detourPercent}%</span>
                 </span>
                 <div className="hud-value text-sm">{flightStats.astarKm.toLocaleString()} km</div>
                 <div className="text-[9px] font-mono text-muted-foreground">{flightStats.estimatedHours}h flight</div>
@@ -376,22 +376,22 @@ export function HUD({
 
             {/* Fuel & emissions */}
             <div className="grid grid-cols-3 gap-2">
-              <div className="p-2 rounded" style={{ background: 'hsl(var(--secondary))' }}>
+              <div className="p-2 rounded transition-all duration-300" style={{ background: 'hsl(var(--secondary))' }}>
                 <div className="hud-label text-[7px]">Fuel</div>
                 <div className="hud-value text-[11px]">{(flightStats.fuelKg / 1000).toFixed(1)}t</div>
               </div>
-              <div className="p-2 rounded" style={{ background: 'hsl(var(--secondary))' }}>
+              <div className="p-2 rounded transition-all duration-300" style={{ background: 'hsl(var(--secondary))' }}>
                 <div className="hud-label text-[7px]">CO₂</div>
                 <div className="hud-value text-[11px]">{(flightStats.co2Kg / 1000).toFixed(1)}t</div>
               </div>
-              <div className="p-2 rounded" style={{ background: 'hsl(var(--secondary))' }}>
+              <div className="p-2 rounded transition-all duration-300" style={{ background: 'hsl(var(--secondary))' }}>
                 <div className="hud-label text-[7px]">Waypoints</div>
                 <div className="hud-value text-[11px]">{path.length}</div>
               </div>
             </div>
 
             {/* Fuel impact */}
-            <div className="p-3 rounded-md border" style={{ background: 'hsl(var(--accent) / 0.06)', borderColor: 'hsl(var(--accent) / 0.2)' }}>
+            <div className="p-3 rounded-md border transition-all duration-300" style={{ background: 'hsl(var(--accent) / 0.06)', borderColor: 'hsl(var(--accent) / 0.2)' }}>
               <div className="hud-label text-[9px] mb-1">⛽ Storm Avoidance Savings</div>
               <p className="text-[11px] font-mono leading-relaxed" style={{ color: 'hsl(var(--accent))' }}>
                 Saved <span className="font-bold">{flightStats.fuelSavedKg.toLocaleString()} kg</span> fuel ({flightStats.netSavingsPercent}%) by avoiding turbulence &amp; headwinds
@@ -400,7 +400,7 @@ export function HUD({
 
             {/* Backend computation metrics */}
             {backendMetrics && (
-              <div className="p-2.5 rounded-md border" style={{ background: 'hsl(var(--primary) / 0.04)', borderColor: 'hsl(var(--primary) / 0.15)' }}>
+              <div className="p-2.5 rounded-md border transition-all duration-300" style={{ background: 'hsl(var(--primary) / 0.04)', borderColor: 'hsl(var(--primary) / 0.15)' }}>
                 <div className="hud-label text-[8px] mb-1.5">⚡ Server Computation</div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
@@ -416,8 +416,8 @@ export function HUD({
                     <div className="text-[10px] font-mono font-semibold text-primary">{backendMetrics.iterations.toLocaleString()}</div>
                   </div>
                   <div>
-                    <div className="text-[8px] font-mono text-muted-foreground">Explored</div>
-                    <div className="text-[10px] font-mono font-semibold text-primary">{backendMetrics.nodes_explored.toLocaleString()}</div>
+                    <div className="text-[8px] font-mono text-muted-foreground">Formula</div>
+                    <div className="text-[10px] font-mono font-semibold text-accent uppercase">{backendMetrics.formula_used || 'haversine'}</div>
                   </div>
                 </div>
               </div>
@@ -425,7 +425,7 @@ export function HUD({
 
             {/* Range check */}
             {!flightStats.inRange && (
-              <div className="p-2.5 rounded-md border" style={{ background: 'hsl(var(--destructive) / 0.08)', borderColor: 'hsl(var(--destructive) / 0.3)' }}>
+              <div className="notification-error">
                 <span className="text-[10px] font-mono font-semibold" style={{ color: 'hsl(var(--destructive))' }}>
                   ⚠ Exceeds max range — refueling stop required
                 </span>

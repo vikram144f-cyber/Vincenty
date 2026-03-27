@@ -1,4 +1,4 @@
-import { useRef, useEffect, Suspense } from 'react';
+import { useRef, useEffect, Suspense, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { Canvas } from '@react-three/fiber';
@@ -22,7 +22,7 @@ interface SceneProps {
   weatherTime: number;
 }
 
-function CameraController({ selectedStart, selectedEnd }: { selectedStart: string | null; selectedEnd: string | null }) {
+function CameraController({ selectedStart, selectedEnd, onInteract }: { selectedStart: string | null; selectedEnd: string | null; onInteract: () => void }) {
   const { camera } = useThree();
   const controlsRef = useRef<OrbitControlsImpl>(null);
   const targetPos = useRef(new THREE.Vector3(0, 2, 5));
@@ -71,6 +71,7 @@ function CameraController({ selectedStart, selectedEnd }: { selectedStart: strin
       enableDamping
       dampingFactor={0.05}
       rotateSpeed={0.5}
+      onStart={onInteract}
     />
   );
 }
@@ -84,30 +85,33 @@ function useGreatCircleEndpoints(selectedStart: string | null, selectedEnd: stri
   return { startLat: s.lat, startLng: s.lng, endLat: e.lat, endLng: e.lng };
 }
 
-export function Scene({ onPointClick, showWeather, weatherZones, path, selectedStart, selectedEnd, weatherTime }: SceneProps) {
+/**
+ * Shared rotation group: all geo-positioned objects (Earth mesh, overlays,
+ * city markers, flight paths) live inside this group so they rotate together.
+ * This prevents visual drift between the Earth texture and the overlay lines.
+ */
+function RotatingEarthGroup({
+  onPointClick,
+  showWeather,
+  weatherZones,
+  weatherTime,
+  path,
+  selectedStart,
+  selectedEnd,
+  autoRotate,
+}: SceneProps & { autoRotate: boolean }) {
+  const groupRef = useRef<THREE.Group>(null);
   const gcEndpoints = useGreatCircleEndpoints(selectedStart, selectedEnd);
 
+  // Slow auto-rotation for the entire group (Earth + overlays together)
+  useFrame(() => {
+    if (groupRef.current && autoRotate) {
+      groupRef.current.rotation.y += 0.0003;
+    }
+  });
+
   return (
-    <Canvas
-      camera={{ position: [0, 2, 5], fov: 45 }}
-      style={{ background: '#040810' }}
-      gl={{ antialias: true, alpha: false }}
-    >
-      {/* Lighting */}
-      <ambientLight intensity={0.25} />
-      <directionalLight position={[5, 3, 5]} intensity={1.0} color="#ffffff" />
-      <directionalLight position={[-3, -1, -4]} intensity={0.15} color="#4466aa" />
-      <pointLight position={[0, 5, 0]} intensity={0.2} color="#88aaff" />
-
-      {/* Star field */}
-      <Stars radius={80} depth={60} count={5000} factor={4} saturation={0.1} fade speed={0.3} />
-
-      {/* Background */}
-      <mesh>
-        <sphereGeometry args={[50, 16, 16]} />
-        <meshBasicMaterial color="#060a14" side={THREE.BackSide} />
-      </mesh>
-
+    <group ref={groupRef}>
       <Suspense fallback={null}>
         <EarthGlobe
           onPointClick={onPointClick}
@@ -129,12 +133,55 @@ export function Scene({ onPointClick, showWeather, weatherZones, path, selectedS
       )}
 
       {path.length > 1 && (
-        <FlightPath path={path} showWeather={showWeather} />
+        <FlightPath 
+          key={`${selectedStart}-${selectedEnd}`} 
+          path={path} 
+          showWeather={showWeather} 
+        />
       )}
+    </group>
+  );
+}
+
+export function Scene({ onPointClick, showWeather, weatherZones, path, selectedStart, selectedEnd, weatherTime }: SceneProps) {
+  const [autoRotate, setAutoRotate] = useState(true);
+  return (
+    <Canvas
+      camera={{ position: [0, 2, 5], fov: 45 }}
+      style={{ background: '#040810' }}
+      gl={{ antialias: true, alpha: false }}
+    >
+      {/* Lighting */}
+      <ambientLight intensity={0.25} />
+      <directionalLight position={[5, 3, 5]} intensity={1.0} color="#ffffff" />
+      <directionalLight position={[-3, -1, -4]} intensity={0.15} color="#4466aa" />
+      <pointLight position={[0, 5, 0]} intensity={0.2} color="#88aaff" />
+
+      {/* Star field */}
+      <Stars radius={80} depth={60} count={5000} factor={4} saturation={0.1} fade speed={0.3} />
+
+      {/* Background */}
+      <mesh>
+        <sphereGeometry args={[50, 16, 16]} />
+        <meshBasicMaterial color="#060a14" side={THREE.BackSide} />
+      </mesh>
+
+      {/* Everything geo-positioned rotates together in one group */}
+      <RotatingEarthGroup
+        onPointClick={onPointClick}
+        showWeather={showWeather}
+        weatherZones={weatherZones}
+        path={path}
+        selectedStart={selectedStart}
+        selectedEnd={selectedEnd}
+        weatherTime={weatherTime}
+        autoRotate={autoRotate}
+      />
 
       <CameraController
         selectedStart={selectedStart}
         selectedEnd={selectedEnd}
+        onInteract={() => setAutoRotate(false)}
       />
     </Canvas>
   );

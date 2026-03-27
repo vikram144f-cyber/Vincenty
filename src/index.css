@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -47,7 +47,7 @@
     --glow-accent: 0 0 20px hsl(160 75% 48% / 0.3);
 
     --font-display: 'Space Grotesk', sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -70,12 +70,54 @@
   }
 }
 
+/* ─── Keyframe Animations ──────────────────────────────────────────── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes scan-line {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 12px hsl(200 95% 55% / 0.2), inset 0 0 6px hsl(200 95% 55% / 0.03); }
+  50% { box-shadow: 0 0 28px hsl(200 95% 55% / 0.35), inset 0 0 14px hsl(200 95% 55% / 0.08); }
+}
+
+@keyframes progress-indeterminate {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(0); }
+  100% { transform: translateX(100%); }
+}
+
 @layer components {
+  /* ─── HUD Panels ──────────────────────────────────────────────────── */
   .hud-panel {
-    @apply rounded-lg border backdrop-blur-xl;
+    @apply rounded-lg border;
     background: hsl(var(--hud-bg));
     border-color: hsl(var(--hud-border));
     box-shadow: var(--glow-primary);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    transition: box-shadow 0.4s ease, border-color 0.4s ease;
+    animation: fadeInUp 0.4s ease-out both;
+  }
+  .hud-panel:hover {
+    border-color: hsl(200 60% 35%);
+    box-shadow: 0 0 32px hsl(200 95% 55% / 0.3), inset 0 0 16px hsl(200 95% 55% / 0.06);
   }
 
   .hud-label {
@@ -88,21 +130,27 @@
     @apply text-sm font-semibold;
     font-family: var(--font-mono);
     color: hsl(var(--primary));
+    transition: color 0.3s ease, opacity 0.3s ease;
   }
 
   .hud-button {
-    @apply px-4 py-2.5 rounded-md text-xs font-medium transition-all duration-300 border cursor-pointer;
+    @apply px-4 py-2.5 rounded-md text-xs font-medium border cursor-pointer;
     font-family: var(--font-mono);
     background: hsl(var(--secondary));
     border-color: hsl(var(--border));
     color: hsl(var(--secondary-foreground));
     letter-spacing: 0.05em;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
   .hud-button:hover {
     background: hsl(var(--muted));
     border-color: hsl(var(--primary));
     box-shadow: var(--glow-primary);
     color: hsl(var(--primary));
+    transform: translateY(-1px);
+  }
+  .hud-button:active {
+    transform: translateY(0);
   }
   .hud-button.active {
     background: hsl(var(--primary) / 0.12);
@@ -118,4 +166,92 @@
   .bg-cost-high { background-color: hsl(var(--cost-high)); }
   .bg-cost-medium { background-color: hsl(var(--cost-medium)); }
   .bg-cost-low { background-color: hsl(var(--cost-low)); }
+
+  /* ─── Skeleton Loader ───────────────────────────────────────────── */
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: hsl(var(--secondary));
+    border-radius: 0.375rem;
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(200 95% 55% / 0.08) 40%,
+      hsl(200 95% 55% / 0.15) 50%,
+      hsl(200 95% 55% / 0.08) 60%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
+
+  /* ─── Progress Bar ──────────────────────────────────────────────── */
+  .progress-indeterminate {
+    @apply h-1 rounded-full overflow-hidden;
+    background: hsl(var(--secondary));
+  }
+  .progress-indeterminate::after {
+    content: '';
+    display: block;
+    width: 50%;
+    height: 100%;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, transparent, hsl(var(--primary)), transparent);
+    animation: progress-indeterminate 1.5s ease-in-out infinite;
+  }
+
+  /* ─── Toast Notifications ───────────────────────────────────────── */
+  .notification-error {
+    @apply p-3 rounded-lg border;
+    background: hsl(0 75% 55% / 0.08);
+    border-color: hsl(0 75% 55% / 0.3);
+    animation: fadeInUp 0.3s ease-out both;
+  }
+  .notification-warning {
+    @apply p-3 rounded-lg border;
+    background: hsl(38 95% 55% / 0.08);
+    border-color: hsl(38 95% 55% / 0.3);
+    animation: fadeInUp 0.3s ease-out both;
+  }
+}
+
+/* ─── Responsive: Stack panels on small screens ───────────────────── */
+@media (max-width: 768px) {
+  .hud-left-panel {
+    position: fixed !important;
+    bottom: 60px !important;
+    top: auto !important;
+    left: 8px !important;
+    right: 8px !important;
+    width: auto !important;
+    max-height: 40vh !important;
+  }
+  .hud-right-panel {
+    position: fixed !important;
+    top: 70px !important;
+    left: 8px !important;
+    right: 8px !important;
+    width: auto !important;
+    max-height: 40vh !important;
+  }
+}
+
+/* Custom scrollbar that matches the theme */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 2px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.4);
 }

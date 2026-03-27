@@ -8,6 +8,8 @@ import {
   getConstraints,
   saveRoute,
   getRouteHistory,
+  checkHealth,
+  ApiError,
   type PathCalculateResponse,
   type ComputationMetrics,
   type FlightStatsResponse,
@@ -51,37 +53,31 @@ const Index = () => {
   useEffect(() => {
     (async () => {
       try {
-        const resp = await fetch(
-          `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/health`
-        );
-        if (resp.ok) {
-          setBackendAvailable(true);
-          // Fetch constraints from backend
-          try {
-            const data = await getConstraints();
-            if (data.constraints?.length) {
-              setWeatherZones(
-                data.constraints.map((c) => ({
-                  lat: c.lat,
-                  lng: c.lng,
-                  radius: c.radius,
-                  intensity: c.intensity,
-                  label: c.label || c.name,
-                }))
-              );
-            }
-          } catch {
-            // Use defaults silently
+        await checkHealth();
+        setBackendAvailable(true);
+        // Fetch constraints from backend
+        try {
+          const data = await getConstraints();
+          if (data.constraints?.length) {
+            setWeatherZones(
+              data.constraints.map((c) => ({
+                lat: c.lat,
+                lng: c.lng,
+                radius: c.radius,
+                intensity: c.intensity,
+                label: c.label || c.name,
+              }))
+            );
           }
-          // Fetch route history
-          try {
-            const history = await getRouteHistory(20);
-            setRouteHistory(history.routes);
-          } catch {
-            // Ignore — history is optional
-          }
-        } else {
-          setBackendAvailable(false);
+        } catch {
+          // Use defaults silently
+        }
+        // Fetch route history
+        try {
+          const history = await getRouteHistory(20);
+          setRouteHistory(history.routes);
+        } catch {
+          // Ignore — history is optional
         }
       } catch {
         setBackendAvailable(false);
@@ -162,6 +158,13 @@ const Index = () => {
         .catch((err) => {
           console.warn('Backend path calculation failed, using fallback:', err);
           fallbackCompute(startCity, endCity);
+          if (err instanceof ApiError) {
+            toast({
+              title: 'Server computation failed',
+              description: err.userMessage,
+              variant: 'destructive',
+            });
+          }
         })
         .finally(() => setIsComputing(false));
     } else {

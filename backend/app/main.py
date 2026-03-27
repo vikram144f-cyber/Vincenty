@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.routes import router as api_router
+from app.flight_routes import flight_router
 
 # Logging
 logging.basicConfig(
@@ -69,6 +70,7 @@ app.add_middleware(
 
 # Mount API routes
 app.include_router(api_router)
+app.include_router(flight_router)
 
 
 @app.get("/", tags=["health"])

@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -41,7 +42,9 @@ from app.pathfinding import (
     compute_path_distance_km,
     compute_flight_stats,
     haversine_km,
+    vincenty_km,
 )
+from app.services.cache import route_cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
@@ -95,6 +98,17 @@ async def calculate_path(req: PathCalculateRequest):
     Returns the optimized path, total distance, flight stats, and metrics.
     """
     try:
+        # Check cache
+        req_json = req.model_dump_json() if hasattr(req, 'model_dump_json') else req.json()
+        cache_key = f"astar_{hashlib.md5(req_json.encode('utf-8')).hexdigest()}"
+        cached = route_cache.get(cache_key)
+        if cached is not None:
+            logger.info("Cache HIT for A* path %s", cache_key)
+            cached["cache_hit"] = True
+            return cached
+
+        logger.info("Cache MISS for A* path %s", cache_key)
+
         # Convert request constraints to engine WeatherZones
         weather_zones = [
             WeatherZone(
@@ -134,7 +148,7 @@ async def calculate_path(req: PathCalculateRequest):
 
         # Compute distances
         optimized_km = compute_path_distance_km(result.path)
-        geodesic_km = haversine_km(
+        geodesic_km = vincenty_km(
             req.start.lat, req.start.lng,
             req.end.lat, req.end.lng,
         )
@@ -148,7 +162,7 @@ async def calculate_path(req: PathCalculateRequest):
             for n in result.path
         ]
 
-        return PathCalculateResponse(
+        response_data = PathCalculateResponse(
             path=path_waypoints,
             total_distance_km=round(optimized_km, 1),
             geodesic_distance_km=round(geodesic_km, 1),
@@ -158,9 +172,15 @@ async def calculate_path(req: PathCalculateRequest):
                 nodes_explored=result.nodes_explored,
                 computation_time_ms=result.computation_time_ms,
                 grid_size=f"{result.grid_rows}×{result.grid_cols}",
+                formula_used="vincenty",
             ),
             status="ok",
+            cache_hit=False,
         )
+
+        route_cache.put(cache_key, response_data.model_dump() if hasattr(response_data, 'model_dump') else response_data.dict())
+
+        return response_data
 
     except HTTPException:
         raise

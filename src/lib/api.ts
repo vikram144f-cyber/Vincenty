@@ -7,6 +7,11 @@
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
+// ─── Configuration ──────────────────────────────────────────────────
+const REQUEST_TIMEOUT_MS = 15_000;
+const MAX_RETRIES = 1;
+const RETRY_BACKOFF_MS = 800;
+
 // ─── Types ──────────────────────────────────────────────────────────
 
 export interface Coordinate {
@@ -33,6 +38,7 @@ export interface ComputationMetrics {
   nodes_explored: number;
   computation_time_ms: number;
   grid_size: string;
+  formula_used?: string;
 }
 
 export interface FlightStatsResponse {
@@ -123,30 +129,49 @@ export interface RouteHistoryResponse {
   total: number;
 }
 
-// ─── API Client ─────────────────────────────────────────────────────
+// ─── Error Classes ──────────────────────────────────────────────────
 
-class ApiError extends Error {
+export class ApiError extends Error {
   status: number;
   detail: unknown;
+  isNetworkError: boolean;
 
-  constructor(message: string, status: number, detail?: unknown) {
+  constructor(message: string, status: number, detail?: unknown, isNetworkError = false) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.detail = detail;
+    this.isNetworkError = isNetworkError;
+  }
+
+  /** Friendly message for toast notifications. */
+  get userMessage(): string {
+    if (this.isNetworkError) return "Cannot reach the flight computation server. Using local fallback.";
+    if (this.status === 422) return "No valid path found — weather constraints may completely block the route.";
+    if (this.status === 500) return "Server encountered an internal error. Please try again.";
+    if (this.status === 0) return "Network connection lost. Check your internet and try again.";
+    return this.message;
   }
 }
 
+// ─── API Client ─────────────────────────────────────────────────────
+
 async function request<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  retries = MAX_RETRIES,
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
   const config: RequestInit = {
     headers: {
       "Content-Type": "application/json",
       ...options.headers,
     },
+    signal: controller.signal,
     ...options,
   };
 
@@ -161,20 +186,35 @@ async function request<T>(
         detail = await response.text();
       }
       throw new ApiError(
-        `API request failed: ${response.status} ${response.statusText}`,
+        `API ${response.status}: ${response.statusText}`,
         response.status,
-        detail
+        detail,
       );
     }
 
     return (await response.json()) as T;
   } catch (error) {
     if (error instanceof ApiError) throw error;
+
+    // Retry on network errors with exponential backoff
+    const isAbort = error instanceof DOMException && error.name === "AbortError";
+    const isNetworkError = !isAbort;
+
+    if (isNetworkError && retries > 0) {
+      await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS * (MAX_RETRIES - retries + 1)));
+      return request<T>(endpoint, options, retries - 1);
+    }
+
     throw new ApiError(
-      `Network error: Could not reach backend at ${API_BASE}`,
+      isAbort
+        ? `Request timed out after ${REQUEST_TIMEOUT_MS / 1000}s`
+        : `Network error: Could not reach backend at ${API_BASE}`,
       0,
-      error
+      error,
+      true,
     );
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -189,7 +229,7 @@ export async function calculatePath(
   end: Coordinate,
   constraints: ActiveConstraint[],
   latStep = 5,
-  lngStep = 5
+  lngStep = 5,
 ): Promise<PathCalculateResponse> {
   return request<PathCalculateResponse>("/api/path/calculate", {
     method: "POST",
@@ -216,7 +256,7 @@ export async function getConstraints(): Promise<ConstraintsResponse> {
  * Save a computed route.
  */
 export async function saveRoute(
-  data: RouteSaveRequest
+  data: RouteSaveRequest,
 ): Promise<{ id: string; message: string }> {
   return request<{ id: string; message: string }>("/api/routes/save", {
     method: "POST",
@@ -230,10 +270,10 @@ export async function saveRoute(
  */
 export async function getRouteHistory(
   limit = 50,
-  offset = 0
+  offset = 0,
 ): Promise<RouteHistoryResponse> {
   return request<RouteHistoryResponse>(
-    `/api/routes/history?limit=${limit}&offset=${offset}`
+    `/api/routes/history?limit=${limit}&offset=${offset}`,
   );
 }
 

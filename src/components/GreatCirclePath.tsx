@@ -10,19 +10,21 @@ interface GreatCirclePathProps {
   endLng: number;
 }
 
+/** High-resolution segments for a perfectly smooth great circle arc. */
+const GC_SEGMENTS = 256;
+
 export function GreatCirclePath({ startLat, startLng, endLat, endLng }: GreatCirclePathProps) {
   const pathRadius = EARTH_RADIUS * 1.04;
 
   const geometry = useMemo(() => {
-    const segments = 128;
     const points: THREE.Vector3[] = [];
 
-    // Spherical interpolation (slerp) for great circle
+    // Proper SLERP for great circle
     const start = new THREE.Vector3(...latLngToVector3(startLat, startLng, pathRadius));
     const end = new THREE.Vector3(...latLngToVector3(endLat, endLng, pathRadius));
 
-    for (let i = 0; i <= segments; i++) {
-      const t = i / segments;
+    for (let i = 0; i <= GC_SEGMENTS; i++) {
+      const t = i / GC_SEGMENTS;
       const pt = new THREE.Vector3().copy(start).lerp(end, t).normalize().multiplyScalar(pathRadius);
       points.push(pt);
     }

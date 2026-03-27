@@ -1,5 +1,102 @@
 [
   {
+    "id": "40ed869e-e1c1-446b-bc42-993920cdb012",
+    "name": "Bangalore \u2192 Frankfurt",
+    "start_city": "Bangalore",
+    "end_city": "Frankfurt",
+    "start_lat": 13.1986,
+    "start_lng": 77.7066,
+    "end_lat": 50.0379,
+    "end_lng": 8.5622,
+    "path_data": [
+      {
+        "lat": 15.0,
+        "lng": 80.0,
+        "cost": 3.078
+      },
+      {
+        "lat": 20.0,
+        "lng": 75.0,
+        "cost": 1.032
+      },
+      {
+        "lat": 25.0,
+        "lng": 70.0,
+        "cost": 1.0
+      },
+      {
+        "lat": 30.0,
+        "lng": 65.0,
+        "cost": 1.0
+      },
+      {
+        "lat": 35.0,
+        "lng": 60.0,
+        "cost": 1.0
+      },
+      {
+        "lat": 40.0,
+        "lng": 55.0,
+        "cost": 1.0
+      },
+      {
+        "lat": 45.0,
+        "lng": 50.0,
+        "cost": 1.0
+      },
+      {
+        "lat": 50.0,
+        "lng": 45.0,
+        "cost": 1.0
+      },
+      {
+        "lat": 50.0,
+        "lng": 40.0,
+        "cost": 1.0
+      },
+      {
+        "lat": 50.0,
+        "lng": 35.0,
+        "cost": 1.0
+      },
+      {
+        "lat": 50.0,
+        "lng": 30.0,
+        "cost": 1.0
+      },
+      {
+        "lat": 50.0,
+        "lng": 25.0,
+        "cost": 1.0
+      },
+      {
+        "lat": 50.0,
+        "lng": 20.0,
+        "cost": 1.0
+      },
+      {
+        "lat": 50.0,
+        "lng": 15.0,
+        "cost": 1.0
+      },
+      {
+        "lat": 50.0,
+        "lng": 10.0,
+        "cost": 1.0
+      }
+    ],
+    "geodesic_km": 7402.0,
+    "optimized_km": 7567.0,
+    "detour_percent": 2.2,
+    "estimated_hours": 8.4,
+    "fuel_kg": 39346.0,
+    "co2_kg": 124333.0,
+    "waypoint_count": 15,
+    "computation_time_ms": 1.02,
+    "constraints_active": null,
+    "created_at": "2026-03-11T08:10:21.036711+00:00"
+  },
+  {
     "id": "8a502d79-60b3-49cb-8334-1dda2f042227",
     "name": "London \u2192 Bangalore",
     "start_city": "London",
