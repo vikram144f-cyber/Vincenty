@@ -13,6 +13,8 @@ import json
 import logging
 import uuid
 import hashlib
+import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -34,6 +36,7 @@ from app.schemas import (
     RouteSaveResponse,
     RouteHistoryItem,
     RouteHistoryResponse,
+    ErrorDetail,
 )
 from app.pathfinding import (
     WeatherZone,
@@ -65,10 +68,31 @@ def _load_routes_file() -> list[dict]:
 
 def _save_routes_file(routes: list[dict]) -> None:
     """Write saved routes to the JSON fallback file."""
-    ROUTES_FILE.write_text(
-        json.dumps(routes, indent=2, default=str),
-        encoding="utf-8",
-    )
+    ROUTES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=ROUTES_FILE.parent,
+            prefix=f".{ROUTES_FILE.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as stream:
+            temporary_path = stream.name
+            json.dump(routes, stream, indent=2, default=str)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_path, ROUTES_FILE)
+        temporary_path = None
+    finally:
+        if temporary_path:
+            try:
+                os.remove(temporary_path)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                logger.warning("Could not remove temporary route file %s", temporary_path)
 
 
 # ─── Default weather zones (fallback when DB is empty) ────────────────
@@ -89,7 +113,7 @@ DEFAULT_CONSTRAINTS = [
 @router.post(
     "/path/calculate",
     response_model=PathCalculateResponse,
-    responses={422: {"model": PathErrorResponse}},
+    responses={422: {"model": PathErrorResponse}, 500: {"model": ErrorDetail}},
     summary="Calculate optimized geodesic path",
 )
 async def calculate_path(req: PathCalculateRequest):
@@ -103,6 +127,7 @@ async def calculate_path(req: PathCalculateRequest):
         cache_key = f"astar_{hashlib.md5(req_json.encode('utf-8')).hexdigest()}"
         cached = route_cache.get(cache_key)
         if cached is not None:
+            cached = dict(cached)
             logger.info("Cache HIT for A* path %s", cache_key)
             cached["cache_hit"] = True
             return cached
@@ -184,9 +209,15 @@ async def calculate_path(req: PathCalculateRequest):
 
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("Path calculation failed")
-        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error_code": "COMPUTATION_ERROR",
+                "message": "Path calculation failed.",
+            },
+        ) from None
 
 
 # ─── GET /api/environment/constraints ─────────────────────────────────
@@ -316,9 +347,15 @@ async def save_route(req: RouteSaveRequest, db: Session = Depends(get_db)):
         routes.insert(0, record)  # newest first
         _save_routes_file(routes)
         return RouteSaveResponse(id=route_id, message="Route saved successfully (local file)")
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to save route to JSON file")
-        raise HTTPException(status_code=500, detail=f"Failed to save route: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error_code": "PERSISTENCE_ERROR",
+                "message": "Failed to save route.",
+            },
+        ) from None
 
 
 # ─── GET /api/routes/history ──────────────────────────────────────────
@@ -403,6 +440,12 @@ async def get_route_history(
             ],
             total=total,
         )
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to fetch route history")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch history: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error_code": "PERSISTENCE_ERROR",
+                "message": "Failed to fetch route history.",
+            },
+        ) from None

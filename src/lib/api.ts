@@ -5,7 +5,7 @@
  * Uses VITE_API_URL environment variable to resolve the backend origin.
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 // ─── Configuration ──────────────────────────────────────────────────
 const REQUEST_TIMEOUT_MS = 15_000;

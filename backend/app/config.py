@@ -11,7 +11,9 @@ load_dotenv(dotenv_path=env_path)
 
 class Settings:
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/orbit_path_painter")
-    HOST: str = os.getenv("HOST", "0.0.0.0")
+    # Bind to localhost by default; deployments should opt into a public
+    # interface explicitly and place the service behind appropriate controls.
+    HOST: str = os.getenv("HOST", "127.0.0.1")
     PORT: int = int(os.getenv("PORT", "8000"))
     FRONTEND_ORIGIN: str = os.getenv("FRONTEND_ORIGIN", "http://localhost:8080")
     DEBUG: bool = os.getenv("DEBUG", "true").lower() == "true"

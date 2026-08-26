@@ -29,7 +29,8 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("🚀  Orbit Path Painter backend starting …")
     logger.info(f"   Frontend origin: {settings.FRONTEND_ORIGIN}")
-    logger.info(f"   Database URL:    {settings.DATABASE_URL[:40]}…")
+    database_scheme = settings.DATABASE_URL.partition("://")[0] or "configured"
+    logger.info("   Database backend: %s", database_scheme)
 
     # Attempt DB table creation (best-effort — works even without PostGIS)
     try:

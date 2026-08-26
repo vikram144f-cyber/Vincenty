@@ -237,7 +237,14 @@ export function FlightPath({ path }: FlightPathProps) {
 
       {/* Waypoint dots as InstancedMesh (1 Draw Call instead of N objects) */}
       {markerData && markerData.pts.length > 0 && (
-        <instancedMesh ref={instancedMarkersRef} args={[null as any, null as any, markerData.pts.length]}>
+        <instancedMesh
+          ref={instancedMarkersRef}
+          args={[
+            null as unknown as THREE.BufferGeometry,
+            null as unknown as THREE.Material,
+            markerData.pts.length,
+          ]}
+        >
           <sphereGeometry args={[0.012, 8, 8]} />
           <meshBasicMaterial transparent opacity={0.8} />
         </instancedMesh>

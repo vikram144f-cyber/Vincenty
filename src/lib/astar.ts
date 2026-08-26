@@ -6,6 +6,8 @@ export interface GlobeNode {
   cost: number; // weather cost multiplier (1 = clear, 5 = heavy storm)
 }
 
+const MAX_WEATHER_COST = 1.5;
+
 interface AStarNode {
   node: GlobeNode;
   g: number;
@@ -17,7 +19,9 @@ interface AStarNode {
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 1; // unit sphere
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const longitudeDelta = Math.abs(lng2 - lng1);
+  const shortestLongitudeDelta = Math.min(longitudeDelta, 360 - longitudeDelta);
+  const dLng = (shortestLongitudeDelta * Math.PI) / 180;
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos((lat1 * Math.PI) / 180) *
@@ -37,7 +41,7 @@ function getNeighbors(node: GlobeNode, grid: GlobeNode[][], latStep: number, lng
     for (let dj = -1; dj <= 1; dj++) {
       if (di === 0 && dj === 0) continue;
       const ni = latIdx + di;
-      let nj = (lngIdx + dj + maxLng) % maxLng; // wrap longitude
+      const nj = (lngIdx + dj + maxLng) % maxLng; // wrap longitude
       if (ni >= 0 && ni < maxLat && grid[ni]?.[nj]) {
         neighbors.push(grid[ni][nj]);
       }
@@ -59,7 +63,12 @@ export function createGrid(latStep: number, lngStep: number, weatherZones: Weath
       for (const zone of weatherZones) {
         const d = haversine(lat, lng, zone.lat, zone.lng);
         if (d < zone.radius) {
-          cost = Math.max(cost, zone.intensity * (1 - d / zone.radius) + 1);
+          const proximity = 1 - d / zone.radius;
+          const intensityFrac = Math.min(zone.intensity / 5, 1);
+          const zoneCost = 1 + MAX_WEATHER_COST * intensityFrac * (
+            Math.log1p(proximity) / Math.log(2)
+          );
+          cost = Math.max(cost, zoneCost);
         }
       }
       row.push({ lat, lng, cost });

@@ -1,6 +1,6 @@
 # ✈️ Vincenty — Antigravity Flight Simulator
 
-> A full-stack 3D flight routing engine that computes geodesic and weather-optimized flight paths between airports using the **Vincenty formula** on a real-time interactive globe.
+> A full-stack 3D flight routing engine that computes WGS-84 geodesic and constraint-aware flight paths between airports using the **Vincenty formula** on an interactive globe.
 
 
 
@@ -12,18 +12,18 @@ Most flight path tools use the **Haversine formula** — a fast but inaccurate s
 
 **Vincenty's formulae** solve the geodesic problem on a proper **WGS-84 ellipsoidal model of Earth**, achieving sub-millimetre accuracy. This is the same standard used in professional aviation and GPS systems.
 
-Vincenty (the app) takes this a step further — it doesn't just find the shortest path. It runs an **A\* pathfinding algorithm** over a 37×72 grid, routing around live weather constraints (storms, turbulence, headwinds) to find the path that minimises **fuel burn and CO₂ emissions**, even if that means flying a longer distance.
+Vincenty (the app) takes this a step further — it doesn't just display the shortest path. It runs an **A\* pathfinding algorithm** over the default 37×72 grid, applying penalties from the configured environmental constraint zones. The resulting weighted route can be longer than the geodesic, while the UI reports estimates from a configured Boeing 787-9 aircraft model.
 
 ---
 
 ## ✨ Features
 
 - **Interactive 3D Globe** — Rendered with Three.js & React Three Fiber, with high-resolution Earth textures, atmospheric scattering, and a dynamic cloud layer. Drag to rotate, scroll to zoom, click to set waypoints.
-- **Vincenty Geodesic Routing** — WGS-84 ellipsoidal calculations for sub-millimetre path accuracy, computed server-side in ~5ms.
-- **Weather-Optimised A\* Pathfinding** — Routes avoid storm cells, turbulence zones, and headwinds to minimise real-world fuel consumption.
-- **Dual Path Visualisation** — See both the raw geodesic (shortest distance) and the weather-optimised route side by side on the globe.
-- **Aircraft-Specific Analytics** — Fuel burn (tonnes), CO₂ emissions, flight time, cruising altitude, and Mach number — all per aircraft type (e.g. Boeing 787-9 Dreamliner).
-- **Storm Avoidance Savings** — Real-time breakdown of how much fuel and emissions were saved by routing around weather systems.
+- **Vincenty Geodesic Routing** — WGS-84 ellipsoidal calculations for sub-millimetre path accuracy, with server computation timing exposed in the dashboard.
+- **Constraint-Aware A\* Pathfinding** — Routes trade distance against simulated storm, turbulence, wind, and dust penalties.
+- **Dual Path Visualisation** — See both the raw geodesic (shortest distance) and the constraint-aware route side by side on the globe.
+- **Aircraft-Model Analytics** — Fuel burn, CO₂, flight time, cruising altitude, and range estimates from the configured Boeing 787-9 model.
+- **Heuristic Weather Impact** — A transparent fuel-impact estimate based on the configured storm-penalty assumption, not live fuel telemetry.
 - **Click-to-Set Waypoints** — Click anywhere on the globe or near a city pin to set origin/destination interactively.
 - **Live Backend Status** — API health indicator with server computation stats (time, grid size, iterations, formula used).
 
@@ -76,7 +76,7 @@ source venv/bin/activate        # macOS/Linux
 pip install -r requirements.txt
 
 # Start the API server
-python -m uvicorn app.main:app --reload --port 8000
+   python -m uvicorn app.main:app --host 127.0.0.1 --reload --port 8000
 ```
 
 The API will be live at `http://localhost:8000`.  
@@ -102,6 +102,8 @@ Create a `.env` file in the `backend/` directory:
 
 ```env
 DATABASE_URL=postgresql://user:password@localhost/vincenty_db
+HOST=127.0.0.1
+PORT=8000
 DEBUG=True
 FRONTEND_ORIGIN=http://localhost:8080
 ```
@@ -128,7 +130,9 @@ VITE_API_URL=http://localhost:8000
 
 ---
 
-## 📊 Example Output (JFK → IST)
+## 📊 Example Output Shape (JFK → IST)
+
+The values below are illustrative UI output; route values depend on the selected constraints, grid, and aircraft configuration.
 
 | Metric | Geodesic | Optimised |
 |--------|----------|-----------|
@@ -139,7 +143,7 @@ VITE_API_URL=http://localhost:8000
 | Waypoints | — | 48 |
 | Compute Time | — | 5.0ms |
 
-> The optimised route is longer in distance but avoids storm cells and headwinds, reducing fuel burn — exactly how real airlines plan routes.
+> The optimized route is evaluated against simulated constraint penalties. This prototype does not ingest live aviation weather or flight-plan fuel data.
 
 ---
 

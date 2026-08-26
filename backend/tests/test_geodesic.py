@@ -129,6 +129,12 @@ class TestVincentyDirect:
         assert abs(wp.lat - lat2) < 0.01, f"Lat mismatch: {wp.lat} vs {lat2}"
         assert abs(wp.lng - lng2) < 0.01, f"Lng mismatch: {wp.lng} vs {lng2}"
 
+    def test_direct_normalizes_antimeridian_longitude(self):
+        """Generated longitudes stay in the API's canonical range."""
+        wp = vincenty_direct(0.0, 179.0, 90.0, 300_000)
+
+        assert -180.0 <= wp.lng < 180.0
+
 
 class TestVincentyDistanceKm:
     """Tests for the convenience wrapper."""

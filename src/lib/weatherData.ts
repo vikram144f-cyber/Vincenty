@@ -72,7 +72,9 @@ export const majorCities: CityData[] = [
 export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const longitudeDelta = Math.abs(lng2 - lng1);
+  const shortestLongitudeDelta = Math.min(longitudeDelta, 360 - longitudeDelta);
+  const dLng = (shortestLongitudeDelta * Math.PI) / 180;
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos((lat1 * Math.PI) / 180) *
