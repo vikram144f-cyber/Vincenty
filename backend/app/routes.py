@@ -258,7 +258,10 @@ async def get_constraints(db: Session = Depends(get_db)):
                 "total": len(db_constraints),
             }
     except Exception as e:
-        logger.warning(f"DB query failed, using defaults: {e}")
+        logger.warning(
+            "DB query failed, using defaults (error_type=%s)",
+            type(e).__name__,
+        )
 
     # Fallback to hardcoded defaults
     return {
@@ -317,7 +320,10 @@ async def save_route(req: RouteSaveRequest, db: Session = Depends(get_db)):
         return RouteSaveResponse(id=str(route.id))
     except Exception as db_err:
         db.rollback()
-        logger.warning(f"DB save failed, falling back to JSON file: {db_err}")
+        logger.warning(
+            "DB save failed, falling back to JSON file (error_type=%s)",
+            type(db_err).__name__,
+        )
 
     # Fallback: save to local JSON file
     try:
@@ -408,7 +414,10 @@ async def get_route_history(
                 total=total,
             )
     except Exception as e:
-        logger.warning(f"DB history query failed, falling back to JSON file: {e}")
+        logger.warning(
+            "DB history query failed, falling back to JSON file (error_type=%s)",
+            type(e).__name__,
+        )
 
     # Fallback: read from local JSON file
     try:

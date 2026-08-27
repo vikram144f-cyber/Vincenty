@@ -94,7 +94,7 @@ def vincenty_km(
 ) -> float:
     """
     Vincenty's inverse formula for geodesic distance on the WGS-84 ellipsoid.
-    Returns distance in **kilometers** with millimeter-level accuracy.
+    Returns distance in **kilometers** using the WGS-84 ellipsoid.
 
     Falls back to Haversine if the iterative solution fails to converge
     (e.g. nearly antipodal points).
@@ -567,7 +567,7 @@ def compute_path_distance_km(path: list[GlobeNode], use_vincenty: bool = True) -
 
 
 def compute_flight_stats(geodesic_km: float, optimized_km: float) -> dict:
-    """Compute real-world flight statistics using Boeing 787-9 performance data."""
+    """Compute heuristic estimates from the configured Boeing 787-9 model."""
     ac = AIRCRAFT
     detour_pct = ((optimized_km - geodesic_km) / geodesic_km * 100) if geodesic_km > 0 else 0
     est_hours = optimized_km / ac["cruise_speed_kmh"]

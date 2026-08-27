@@ -46,6 +46,15 @@ class TestLRUBasicOperations:
         fresh_cache.put("route_1", {"distance": 100.0})
         assert fresh_cache.contains("route_1") is True
 
+    def test_get_returns_defensive_copy(self, fresh_cache: LRUCache):
+        """Mutating a returned response must not corrupt the cached value."""
+        fresh_cache.put("route_1", {"path": [{"cost": 1.0}]})
+
+        result = fresh_cache.get("route_1")
+        result["path"][0]["cost"] = 99.0
+
+        assert fresh_cache.get("route_1")["path"][0]["cost"] == 1.0
+
 
 class TestLRUEviction:
     """LRU eviction behavior tests."""

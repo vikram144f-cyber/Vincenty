@@ -14,6 +14,10 @@ __pycache__/
 *.py[cod]
 *.local
 
+# Local backend configuration (keep credentials out of future commits).
+.env
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

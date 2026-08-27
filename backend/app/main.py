@@ -39,7 +39,11 @@ async def lifespan(app: FastAPI):
         Base.metadata.create_all(bind=engine)
         logger.info("   ✅ Database tables verified / created")
     except Exception as e:
-        logger.warning(f"   ⚠  Database init skipped (will use fallback data): {e}")
+        # Keep connection strings and driver details out of shared logs.
+        logger.warning(
+            "   ⚠  Database init skipped (will use fallback data; error_type=%s)",
+            type(e).__name__,
+        )
 
     yield
     logger.info("🛑  Backend shutting down")

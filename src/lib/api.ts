@@ -163,16 +163,25 @@ async function request<T>(
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
 
+  const { signal: externalSignal, ...requestOptions } = options;
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const abortFromCaller = () => controller.abort();
+
+  if (externalSignal?.aborted) {
+    controller.abort();
+  } else {
+    externalSignal?.addEventListener('abort', abortFromCaller, { once: true });
+  }
 
   const config: RequestInit = {
     headers: {
       "Content-Type": "application/json",
-      ...options.headers,
+      ...requestOptions.headers,
     },
     signal: controller.signal,
-    ...options,
+    ...requestOptions,
   };
 
   try {
@@ -215,6 +224,7 @@ async function request<T>(
     );
   } finally {
     clearTimeout(timeout);
+    externalSignal?.removeEventListener('abort', abortFromCaller);
   }
 }
 
@@ -230,6 +240,7 @@ export async function calculatePath(
   constraints: ActiveConstraint[],
   latStep = 5,
   lngStep = 5,
+  signal?: AbortSignal,
 ): Promise<PathCalculateResponse> {
   return request<PathCalculateResponse>("/api/path/calculate", {
     method: "POST",
@@ -240,6 +251,7 @@ export async function calculatePath(
       lat_step: latStep,
       lng_step: lngStep,
     }),
+    signal,
   });
 }
 

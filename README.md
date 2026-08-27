@@ -10,19 +10,19 @@
 
 Most flight path tools use the **Haversine formula** — a fast but inaccurate shortcut that treats the Earth as a perfect sphere, introducing up to **0.5% positional error** over long distances.
 
-**Vincenty's formulae** solve the geodesic problem on a proper **WGS-84 ellipsoidal model of Earth**, achieving sub-millimetre accuracy. This is the same standard used in professional aviation and GPS systems.
+**Vincenty's formulae** solve the geodesic problem on a proper **WGS-84 ellipsoidal model of Earth**, rather than treating the planet as a perfect sphere. The implementation uses a Haversine fallback when the iterative solution does not converge near antipodal points.
 
-Vincenty (the app) takes this a step further — it doesn't just display the shortest path. It runs an **A\* pathfinding algorithm** over the default 37×72 grid, applying penalties from the configured environmental constraint zones. The resulting weighted route can be longer than the geodesic, while the UI reports estimates from a configured Boeing 787-9 aircraft model.
+Vincenty (the app) takes this a step further — it doesn't just display the shortest path. It runs an **A\* pathfinding algorithm** over the default 37×72 grid, applying penalties from configured environmental constraint zones. The resulting weighted route can be longer than the geodesic, while the UI reports estimates from a configured Boeing 787-9 aircraft model.
 
 ---
 
 ## ✨ Features
 
 - **Interactive 3D Globe** — Rendered with Three.js & React Three Fiber, with high-resolution Earth textures, atmospheric scattering, and a dynamic cloud layer. Drag to rotate, scroll to zoom, click to set waypoints.
-- **Vincenty Geodesic Routing** — WGS-84 ellipsoidal calculations for sub-millimetre path accuracy, with server computation timing exposed in the dashboard.
+- **Vincenty Geodesic Routing** — WGS-84 ellipsoidal calculations with an iterative Haversine fallback for near-antipodal cases, with server computation timing exposed in the dashboard.
 - **Constraint-Aware A\* Pathfinding** — Routes trade distance against simulated storm, turbulence, wind, and dust penalties.
 - **Dual Path Visualisation** — See both the raw geodesic (shortest distance) and the constraint-aware route side by side on the globe.
-- **Aircraft-Model Analytics** — Fuel burn, CO₂, flight time, cruising altitude, and range estimates from the configured Boeing 787-9 model.
+- **Aircraft-Model Analytics** — Heuristic fuel burn, CO₂, flight time, cruising altitude, and range estimates from the configured Boeing 787-9 model.
 - **Heuristic Weather Impact** — A transparent fuel-impact estimate based on the configured storm-penalty assumption, not live fuel telemetry.
 - **Click-to-Set Waypoints** — Click anywhere on the globe or near a city pin to set origin/destination interactively.
 - **Live Backend Status** — API health indicator with server computation stats (time, grid size, iterations, formula used).
@@ -37,6 +37,7 @@ Vincenty (the app) takes this a step further — it doesn't just display the sho
 | React 18 + Vite | UI framework & build tool |
 | TypeScript | Type safety |
 | Three.js + React Three Fiber | 3D globe rendering |
+| Web Worker | Off-main-thread local A* fallback |
 | Tailwind CSS + shadcn/ui | Styling & components |
 | Zustand | Global state management |
 | TanStack Query | Server state & data fetching |
@@ -50,7 +51,7 @@ Vincenty (the app) takes this a step further — it doesn't just display the sho
 | Vincenty Formula | WGS-84 geodesic calculation |
 | A\* Pathfinding | Weather-aware route optimisation |
 | SQLAlchemy + GeoAlchemy2 | ORM with PostGIS support |
-| PostgreSQL + PostGIS | Spatial database (optional) |
+| PostgreSQL + PostGIS | Optional persistence layer |
 | LRU Cache | Route caching layer |
 
 ---
@@ -82,7 +83,7 @@ pip install -r requirements.txt
 The API will be live at `http://localhost:8000`.  
 Visit `http://localhost:8000/docs` for the interactive Swagger documentation.
 
-> **Note:** PostgreSQL/PostGIS is optional. If unavailable, the backend gracefully falls back to in-memory data so the globe and routing remain fully functional.
+> **Note:** PostgreSQL/PostGIS is optional. If unavailable, the backend uses default constraint data and a local JSON file for saved route history so the globe and routing remain functional. The database connection attempt is bounded by `DB_CONNECT_TIMEOUT_SECONDS`.
 
 ### 3. Start the Frontend
 Open a new terminal in the root directory:
@@ -104,14 +105,15 @@ Create a `.env` file in the `backend/` directory:
 DATABASE_URL=postgresql://user:password@localhost/vincenty_db
 HOST=127.0.0.1
 PORT=8000
-DEBUG=True
+DEBUG=false
+DB_CONNECT_TIMEOUT_SECONDS=3
 FRONTEND_ORIGIN=http://localhost:8080
 ```
 
 The frontend uses a root-level `.env`:
 
 ```env
-VITE_API_URL=http://localhost:8000
+VITE_API_URL=http://127.0.0.1:8000
 ```
 
 ---
@@ -124,8 +126,8 @@ VITE_API_URL=http://localhost:8000
 3. Vincenty formula computes the true geodesic path on WGS-84 ellipsoid
 4. A* algorithm traverses a 37×72 spherical grid
 5. Each grid cell is weighted by weather penalty (storms, turbulence, headwinds)
-6. Optimal path is returned with waypoints, fuel burn, CO₂, and savings data
-7. Both geodesic and optimised paths are rendered on the 3D globe
+6. Optimal path is returned with waypoints and heuristic aircraft/fuel estimates
+7. Both geodesic and optimised paths are rendered on the 3D globe; if the API is unavailable, the same grid search runs in a Web Worker
 ```
 
 ---
@@ -143,7 +145,7 @@ The values below are illustrative UI output; route values depend on the selected
 | Waypoints | — | 48 |
 | Compute Time | — | 5.0ms |
 
-> The optimized route is evaluated against simulated constraint penalties. This prototype does not ingest live aviation weather or flight-plan fuel data.
+> The optimized route is evaluated against simulated constraint penalties. This prototype does not ingest live aviation weather or flight-plan fuel data. PostgreSQL/PostGIS is optional; route history falls back to a local JSON file when the database is unavailable.
 
 ---
 
