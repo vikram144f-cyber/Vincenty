@@ -1,5 +1,5 @@
 -- ============================================================
--- Orbit Path Painter — PostgreSQL + PostGIS Database Schema
+-- Vincenty — PostgreSQL + PostGIS Database Schema
 -- ============================================================
 -- Prerequisites:
 --   1. PostgreSQL 14+ installed

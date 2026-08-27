@@ -1,5 +1,5 @@
 /**
- * API client for the Orbit Path Painter backend.
+ * API client for the Vincenty geodesic routing backend.
  *
  * All backend communication is centralized here.
  * Uses VITE_API_URL environment variable to resolve the backend origin.

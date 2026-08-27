@@ -1,4 +1,4 @@
-# ✈️ Vincenty — Antigravity Flight Simulator
+# ✈️ Vincenty — Geodesic Flight Routing Lab
 
 > A full-stack 3D flight routing engine that computes WGS-84 geodesic and constraint-aware flight paths between airports using the **Vincenty formula** on an interactive globe.
 

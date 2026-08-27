@@ -1,5 +1,5 @@
 """
-Orbit Path Painter — FastAPI Backend
+Vincenty — FastAPI Geodesic Routing Backend
 
 Main application entry point. Configures CORS, mounts API routes,
 and provides a health-check endpoint.
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀  Orbit Path Painter backend starting …")
+    logger.info("🚀  Vincenty geodesic routing backend starting …")
     logger.info(f"   Frontend origin: {settings.FRONTEND_ORIGIN}")
     database_scheme = settings.DATABASE_URL.partition("://")[0] or "configured"
     logger.info("   Database backend: %s", database_scheme)
@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI):
 # ─── App Factory ──────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="Orbit Path Painter API",
+    title="Vincenty Geodesic Routing API",
     description="Geodesic pathfinding engine with environmental constraint avoidance",
     version="1.0.0",
     lifespan=lifespan,
@@ -81,7 +81,7 @@ app.include_router(flight_router)
 @app.get("/", tags=["health"])
 async def root():
     return {
-        "service": "Orbit Path Painter API",
+        "service": "Vincenty Geodesic Routing API",
         "version": "1.0.0",
         "status": "operational",
         "docs": "/docs",
