@@ -100,6 +100,9 @@ async def calculate_flight_route(req: FlightRouteRequest):
     )
     cached = route_cache.get(cache_key)
     if cached is not None:
+        # Do not mutate the shared cache entry when adapting ETA to a request's
+        # aircraft speed; concurrent callers must observe independent payloads.
+        cached = dict(cached)
         logger.info("Cache HIT for %s", cache_key)
         # Recalculate ETA if speed differs from cached
         if abs(cached.get("aircraft_speed_kmh", speed) - speed) > 0.1:
@@ -125,15 +128,15 @@ async def calculate_flight_route(req: FlightRouteRequest):
             aircraft_speed_kmh=speed,
             num_waypoints=num_waypoints,
         )
-    except Exception as e:
+    except Exception:
         logger.exception("Flight route computation failed")
         raise HTTPException(
             status_code=500,
             detail={
                 "error_code": "COMPUTATION_ERROR",
-                "message": f"Geodesic computation failed: {e}",
+                "message": "Geodesic computation failed.",
             },
-        )
+        ) from None
     computation_ms = round((time.perf_counter() - t0) * 1000, 2)
 
     within_range = result.distance_km <= max_range
@@ -147,18 +150,6 @@ async def calculate_flight_route(req: FlightRouteRequest):
         }
         for wp in result.path_coordinates
     ]
-
-    if path_coords:
-        path_coords.insert(0, {
-            "lat": req.origin.lat,
-            "lng": req.origin.lng,
-            "distance_from_start_km": 0.0,
-        })
-        path_coords.append({
-            "lat": req.destination.lat,
-            "lng": req.destination.lng,
-            "distance_from_start_km": path_coords[-1]["distance_from_start_km"],
-        })
 
     response_dict = {
         "distance_km": result.distance_km,

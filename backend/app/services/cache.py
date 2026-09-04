@@ -10,6 +10,7 @@ so cache size and TTL can be controlled via environment variables.
 
 from __future__ import annotations
 
+import copy
 import logging
 import threading
 import time
@@ -103,7 +104,9 @@ class LRUCache:
             # Move to end (most recently used)
             self._store.move_to_end(key)
             self._hits += 1
-            return entry.value
+            # Return an isolated snapshot so callers cannot mutate the
+            # shared cached response for subsequent requests.
+            return copy.deepcopy(entry.value)
 
     def put(self, key: str, value: Any) -> None:
         """
@@ -113,7 +116,7 @@ class LRUCache:
         with self._lock:
             if key in self._store:
                 # Update existing entry
-                self._store[key] = _CacheEntry(value=value)
+                self._store[key] = _CacheEntry(value=copy.deepcopy(value))
                 self._store.move_to_end(key)
                 return
 
@@ -123,7 +126,7 @@ class LRUCache:
                 self._evictions += 1
                 logger.debug("Cache eviction: %s", evicted_key)
 
-            self._store[key] = _CacheEntry(value=value)
+            self._store[key] = _CacheEntry(value=copy.deepcopy(value))
 
     def contains(self, key: str) -> bool:
         """Check whether a key exists and hasn't expired (without affecting LRU order)."""

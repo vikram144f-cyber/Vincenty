@@ -47,6 +47,11 @@ DEFAULT_SPEED_KMH = 903.0
 EARTH_RADIUS_KM = 6_371.0088  # IUGG mean radius
 
 
+def _normalize_longitude_deg(longitude: float) -> float:
+    """Return longitude in the API's canonical [-180, 180) range."""
+    return ((longitude + 180.0) % 360.0) - 180.0
+
+
 def _haversine_km(
     lat1: float, lng1: float,
     lat2: float, lng2: float,
@@ -402,11 +407,11 @@ def vincenty_direct(
         )
     )
 
-    lng2 = math.radians(lng1) + L
+    lng2 = _normalize_longitude_deg(math.degrees(math.radians(lng1) + L))
 
     return Waypoint(
         lat=round(math.degrees(φ2), 8),
-        lng=round(math.degrees(lng2), 8),
+        lng=round(lng2, 8),
         distance_from_start_km=round(distance_m / 1000.0, 4),
     )
 

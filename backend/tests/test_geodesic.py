@@ -94,6 +94,20 @@ class TestVincentyInverse:
         assert result.converged is True
         assert 89.0 < result.initial_bearing_deg < 91.0
 
+    def test_antimeridian_shortest_path(self):
+        """Longitude wrapping must choose the one-degree equatorial arc."""
+        result = vincenty_inverse(0.0, 179.5, 0.0, -179.5)
+
+        assert result.converged is True
+        assert 111.0 < result.distance_km < 111.7
+
+    def test_inverse_is_symmetric(self):
+        """Reversing endpoints must preserve the ellipsoidal distance."""
+        forward = vincenty_distance_km(51.5074, -0.1278, 40.7128, -74.0060)
+        reverse = vincenty_distance_km(40.7128, -74.0060, 51.5074, -0.1278)
+
+        assert forward == pytest.approx(reverse, abs=1e-9)
+
 
 class TestVincentyDirect:
     """Tests for vincenty_direct()."""
@@ -128,6 +142,12 @@ class TestVincentyDirect:
         # Should arrive very close to the original destination
         assert abs(wp.lat - lat2) < 0.01, f"Lat mismatch: {wp.lat} vs {lat2}"
         assert abs(wp.lng - lng2) < 0.01, f"Lng mismatch: {wp.lng} vs {lng2}"
+
+    def test_direct_normalizes_antimeridian_longitude(self):
+        """Generated longitudes stay in the API's canonical range."""
+        wp = vincenty_direct(0.0, 179.0, 90.0, 300_000)
+
+        assert -180.0 <= wp.lng < 180.0
 
 
 class TestVincentyDistanceKm:

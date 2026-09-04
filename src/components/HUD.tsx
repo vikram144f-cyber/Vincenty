@@ -99,10 +99,10 @@ export function HUD({
     <div className="fixed inset-0 pointer-events-none z-10">
       {/* Title bar */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2">
-        <div className="hud-panel px-8 py-3 pointer-events-auto flex items-center gap-4">
+        <div className="hud-panel px-4 sm:px-8 py-3 pointer-events-auto flex items-center gap-2 sm:gap-4">
           <div className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-          <h1 className="text-base font-bold font-display tracking-[0.2em] text-foreground">
-            ANTIGRAVITY <span className="text-primary">FLIGHT SIM</span>
+          <h1 className="text-[10px] sm:text-base font-bold font-display tracking-[0.12em] sm:tracking-[0.2em] text-foreground whitespace-nowrap">
+            VINCENTY <span className="text-primary">GEODESIC ROUTING LAB</span>
           </h1>
           <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
           {/* Backend status indicator */}
@@ -392,9 +392,9 @@ export function HUD({
 
             {/* Fuel impact */}
             <div className="p-3 rounded-md border transition-all duration-300" style={{ background: 'hsl(var(--accent) / 0.06)', borderColor: 'hsl(var(--accent) / 0.2)' }}>
-              <div className="hud-label text-[9px] mb-1">⛽ Storm Avoidance Savings</div>
+              <div className="hud-label text-[9px] mb-1">⛽ Estimated Weather Effect</div>
               <p className="text-[11px] font-mono leading-relaxed" style={{ color: 'hsl(var(--accent))' }}>
-                Saved <span className="font-bold">{flightStats.fuelSavedKg.toLocaleString()} kg</span> fuel ({flightStats.netSavingsPercent}%) by avoiding turbulence &amp; headwinds
+                Estimated <span className="font-bold">{flightStats.fuelSavedKg.toLocaleString()} kg</span> fuel impact ({flightStats.netSavingsPercent}%) under the configured storm-penalty model
               </p>
             </div>
 
@@ -446,7 +446,7 @@ export function HUD({
           <div className="hud-panel p-4 space-y-2">
             <div className="hud-label">Flight Dashboard</div>
             <p className="text-[10px] font-mono text-muted-foreground leading-relaxed">
-              Select origin &amp; destination to compute the weather-optimized flight path with real Boeing 787 performance data.
+              Select origin &amp; destination to compute a constraint-aware path with the configured Boeing 787-9 performance model.
             </p>
             <div className="flex items-center gap-2 pt-1">
               <div className="w-2 h-2 rounded-full bg-muted-foreground animate-pulse" />

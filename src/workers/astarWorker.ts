@@ -11,9 +11,9 @@
  *
  * Message protocol
  * ──────────────────
- * Inbound  { type: 'CALCULATE', payload: WorkerRequest }
- * Outbound { type: 'RESULT',   payload: WorkerResult  }
- *          { type: 'ERROR',    payload: string         }
+ * Inbound  { type: 'CALCULATE', requestId, payload: WorkerRequest }
+ * Outbound { type: 'RESULT', requestId, payload: WorkerResult }
+ *          { type: 'ERROR', requestId, payload: string }
  */
 
 // ─── Types (duplicated here so the worker is a fully self-contained module) ──
@@ -58,13 +58,29 @@ const MAX_ITERATIONS = 50_000;
 
 function haversine(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const longitudeDelta = Math.abs(lng2 - lng1);
+  const shortestLongitudeDelta = Math.min(longitudeDelta, 360 - longitudeDelta);
+  const dLng = (shortestLongitudeDelta * Math.PI) / 180;
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos((lat1 * Math.PI) / 180) *
       Math.cos((lat2 * Math.PI) / 180) *
       Math.sin(dLng / 2) ** 2;
   return 2 * Math.asin(Math.sqrt(Math.min(1, a)));
+}
+
+interface WorkerMessage {
+  type: 'CALCULATE';
+  requestId: number;
+  payload: WorkerRequest;
+}
+
+function lerpLongitude(a: number, b: number, t: number): number {
+  let delta = b - a;
+  if (delta > 180) delta -= 360;
+  if (delta < -180) delta += 360;
+  const longitude = a + delta * t;
+  return longitude > 180 ? longitude - 360 : longitude <= -180 ? longitude + 360 : longitude;
 }
 
 // ─── Grid Construction (matches backend soft log-cap formula) ───────────────
@@ -165,8 +181,8 @@ function chaikinSmooth(path: GlobeNode[], iterations = 3, targetPoints = 60): Gl
     const refined: GlobeNode[] = [pts[0]];
     for (let i = 0; i < pts.length - 1; i++) {
       const a = pts[i], b = pts[i + 1];
-      refined.push({ lat: 0.75 * a.lat + 0.25 * b.lat, lng: 0.75 * a.lng + 0.25 * b.lng, cost: 0.75 * a.cost + 0.25 * b.cost });
-      refined.push({ lat: 0.25 * a.lat + 0.75 * b.lat, lng: 0.25 * a.lng + 0.75 * b.lng, cost: 0.25 * a.cost + 0.75 * b.cost });
+      refined.push({ lat: 0.75 * a.lat + 0.25 * b.lat, lng: lerpLongitude(a.lng, b.lng, 0.25), cost: 0.75 * a.cost + 0.25 * b.cost });
+      refined.push({ lat: 0.25 * a.lat + 0.75 * b.lat, lng: lerpLongitude(a.lng, b.lng, 0.75), cost: 0.25 * a.cost + 0.75 * b.cost });
     }
     refined.push(pts[pts.length - 1]);
     pts = refined;
@@ -275,10 +291,11 @@ function findPath(
 
 // ─── Message Handler ────────────────────────────────────────────────────────
 
-self.onmessage = (e: MessageEvent<{ type: string; payload: WorkerRequest }>) => {
+self.onmessage = (e: MessageEvent<WorkerMessage>) => {
   if (e.data.type !== 'CALCULATE') return;
 
   const t0 = performance.now();
+  const { requestId } = e.data;
   const {
     startLat, startLng, endLat, endLng,
     weatherZones = [],
@@ -290,7 +307,11 @@ self.onmessage = (e: MessageEvent<{ type: string; payload: WorkerRequest }>) => 
     const path = findPath(startLat, startLng, endLat, endLng, grid, latStep, lngStep);
 
     if (!path) {
-      self.postMessage({ type: 'ERROR', payload: 'No path found — constraints may block the route entirely.' });
+      self.postMessage({
+        type: 'ERROR',
+        requestId,
+        payload: 'No path found — constraints may block the route entirely.',
+      });
       return;
     }
 
@@ -299,8 +320,12 @@ self.onmessage = (e: MessageEvent<{ type: string; payload: WorkerRequest }>) => 
       computationTimeMs: Math.round(performance.now() - t0),
       source: 'LOCAL_WORKER',
     };
-    self.postMessage({ type: 'RESULT', payload: result });
-  } catch (err) {
-    self.postMessage({ type: 'ERROR', payload: String(err) });
+    self.postMessage({ type: 'RESULT', requestId, payload: result });
+  } catch {
+    self.postMessage({
+      type: 'ERROR',
+      requestId,
+      payload: 'Local path calculation failed.',
+    });
   }
 };

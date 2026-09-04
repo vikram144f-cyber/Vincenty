@@ -1,5 +1,5 @@
 """
-Orbit Path Painter — FastAPI Backend
+Vincenty — FastAPI Geodesic Routing Backend
 
 Main application entry point. Configures CORS, mounts API routes,
 and provides a health-check endpoint.
@@ -27,9 +27,10 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀  Orbit Path Painter backend starting …")
+    logger.info("🚀  Vincenty geodesic routing backend starting …")
     logger.info(f"   Frontend origin: {settings.FRONTEND_ORIGIN}")
-    logger.info(f"   Database URL:    {settings.DATABASE_URL[:40]}…")
+    database_scheme = settings.DATABASE_URL.partition("://")[0] or "configured"
+    logger.info("   Database backend: %s", database_scheme)
 
     # Attempt DB table creation (best-effort — works even without PostGIS)
     try:
@@ -38,7 +39,11 @@ async def lifespan(app: FastAPI):
         Base.metadata.create_all(bind=engine)
         logger.info("   ✅ Database tables verified / created")
     except Exception as e:
-        logger.warning(f"   ⚠  Database init skipped (will use fallback data): {e}")
+        # Keep connection strings and driver details out of shared logs.
+        logger.warning(
+            "   ⚠  Database init skipped (will use fallback data; error_type=%s)",
+            type(e).__name__,
+        )
 
     yield
     logger.info("🛑  Backend shutting down")
@@ -47,7 +52,7 @@ async def lifespan(app: FastAPI):
 # ─── App Factory ──────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="Orbit Path Painter API",
+    title="Vincenty Geodesic Routing API",
     description="Geodesic pathfinding engine with environmental constraint avoidance",
     version="1.0.0",
     lifespan=lifespan,
@@ -76,7 +81,7 @@ app.include_router(flight_router)
 @app.get("/", tags=["health"])
 async def root():
     return {
-        "service": "Orbit Path Painter API",
+        "service": "Vincenty Geodesic Routing API",
         "version": "1.0.0",
         "status": "operational",
         "docs": "/docs",

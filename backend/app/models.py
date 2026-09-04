@@ -1,4 +1,4 @@
-"""SQLAlchemy ORM models for the Orbit Path Painter database."""
+"""SQLAlchemy ORM models for the Vincenty routing database."""
 
 import uuid
 from datetime import datetime, timezone

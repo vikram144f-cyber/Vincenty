@@ -10,7 +10,13 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+__pycache__/
+*.py[cod]
 *.local
+
+# Local backend configuration (keep credentials out of future commits).
+.env
+!.env.example
 
 # Editor directories and files
 .vscode/*

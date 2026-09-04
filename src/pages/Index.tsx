@@ -1,7 +1,7 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Scene } from '@/components/Scene';
 import { HUD } from '@/components/HUD';
-import { createGrid, findPath, GlobeNode, WeatherZone } from '@/lib/astar';
+import { GlobeNode, WeatherZone } from '@/lib/astar';
 import { defaultWeatherZones, majorCities } from '@/lib/weatherData';
 import {
   calculatePath,
@@ -17,6 +17,7 @@ import {
   type ActiveConstraint,
 } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+import { useAStarWorker } from '@/hooks/useAStarWorker';
 
 const LAT_STEP = 5;
 const LNG_STEP = 5;
@@ -48,6 +49,8 @@ const Index = () => {
   const [weatherZones, setWeatherZones] = useState<WeatherZone[]>(defaultWeatherZones);
 
   const { toast } = useToast();
+  const { computePath } = useAStarWorker();
+  const calculationIdRef = useRef(0);
 
   // ─── Check backend connectivity on mount ──────────────────────────
   useEffect(() => {
@@ -93,103 +96,131 @@ const Index = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Client-side grid (used as fallback)
-  const grid = useMemo(
-    () => createGrid(LAT_STEP, LNG_STEP, showWeather ? weatherZones : []),
-    [showWeather, weatherZones]
+  const fallbackCompute = useCallback(
+    async (
+      startCity: { lat: number; lng: number },
+      endCity: { lat: number; lng: number },
+      requestId: number,
+    ) => {
+      const result = await computePath(
+        startCity.lat,
+        startCity.lng,
+        endCity.lat,
+        endCity.lng,
+        showWeather ? weatherZones : [],
+        LAT_STEP,
+        LNG_STEP,
+      );
+
+      if (requestId !== calculationIdRef.current) return;
+      setPath(result);
+      setBackendMetrics(null);
+      setBackendFlightStats(null);
+    },
+    [computePath, showWeather, weatherZones],
   );
 
   // ─── Path computation (backend or fallback) ───────────────────────
   useEffect(() => {
+    const requestId = ++calculationIdRef.current;
+    let cancelled = false;
+    const isCurrent = () => !cancelled && requestId === calculationIdRef.current;
+
     if (!selectedStart || !selectedEnd) {
+      setIsComputing(false);
       setPath([]);
       setBackendMetrics(null);
       setBackendFlightStats(null);
-      return;
+      return () => { cancelled = true; };
     }
 
     const startCity = majorCities.find((c) => c.name === selectedStart);
     const endCity = majorCities.find((c) => c.name === selectedEnd);
-    if (!startCity || !endCity) return;
+    if (!startCity || !endCity) {
+      setIsComputing(false);
+      return () => { cancelled = true; };
+    }
 
-    // Attempt backend calculation
-    if (USE_BACKEND && backendAvailable) {
+    const abortController = new AbortController();
+    const runCalculation = async () => {
       setIsComputing(true);
+      try {
+        if (USE_BACKEND && backendAvailable) {
+          const constraints: ActiveConstraint[] = showWeather
+            ? weatherZones.map((z) => ({
+              lat: z.lat,
+              lng: z.lng,
+              radius: z.radius,
+              intensity: z.intensity,
+              label: z.label,
+            }))
+            : [];
 
-      const constraints: ActiveConstraint[] = showWeather
-        ? weatherZones.map((z) => ({
-          lat: z.lat,
-          lng: z.lng,
-          radius: z.radius,
-          intensity: z.intensity,
-          label: z.label,
-        }))
-        : [];
+          try {
+            const response: PathCalculateResponse = await calculatePath(
+              { lat: startCity.lat, lng: startCity.lng },
+              { lat: endCity.lat, lng: endCity.lng },
+              constraints,
+              LAT_STEP,
+              LNG_STEP,
+              abortController.signal,
+            );
+            if (!isCurrent()) return;
 
-      calculatePath(
-        { lat: startCity.lat, lng: startCity.lng },
-        { lat: endCity.lat, lng: endCity.lng },
-        constraints,
-        LAT_STEP,
-        LNG_STEP
-      )
-        .then((response: PathCalculateResponse) => {
-          if (response.status === 'ok' && response.path.length > 0) {
-            setPath(
-              response.path.map((wp) => ({
+            if (response.status === 'ok' && response.path.length > 0) {
+              setPath(response.path.map((wp) => ({
                 lat: wp.lat,
                 lng: wp.lng,
                 cost: wp.cost,
-              }))
-            );
-            setBackendMetrics(response.metrics);
-            setBackendFlightStats(response.flight_stats);
-          } else {
-            // Backend returned no path — fallback
-            fallbackCompute(startCity, endCity);
-            toast({
-              title: 'Path obstructed',
-              description:
-                response.message || 'No valid path found around constraints.',
-              variant: 'destructive',
-            });
+              })));
+              setBackendMetrics(response.metrics);
+              setBackendFlightStats(response.flight_stats);
+            } else {
+              await fallbackCompute(startCity, endCity, requestId);
+              if (isCurrent()) {
+                toast({
+                  title: 'Path obstructed',
+                  description: response.message || 'No valid path found around constraints.',
+                  variant: 'destructive',
+                });
+              }
+            }
+          } catch (err) {
+            if (!isCurrent()) return;
+            console.warn('Backend path calculation failed, using local worker:', err);
+            await fallbackCompute(startCity, endCity, requestId);
+            if (isCurrent() && err instanceof ApiError) {
+              toast({
+                title: 'Server computation failed',
+                description: err.userMessage,
+                variant: 'destructive',
+              });
+            }
           }
-        })
-        .catch((err) => {
-          console.warn('Backend path calculation failed, using fallback:', err);
-          fallbackCompute(startCity, endCity);
-          if (err instanceof ApiError) {
-            toast({
-              title: 'Server computation failed',
-              description: err.userMessage,
-              variant: 'destructive',
-            });
-          }
-        })
-        .finally(() => setIsComputing(false));
-    } else {
-      // Client-side fallback
-      fallbackCompute(startCity, endCity);
-    }
-  }, [selectedStart, selectedEnd, grid, backendAvailable, showWeather, weatherZones]);
+        } else {
+          await fallbackCompute(startCity, endCity, requestId);
+        }
+      } catch (err) {
+        if (isCurrent()) {
+          setPath([]);
+          console.warn('Local worker path calculation failed:', err);
+          toast({
+            title: 'Path calculation failed',
+            description: 'The local routing worker could not calculate this path.',
+            variant: 'destructive',
+          });
+        }
+      } finally {
+        if (isCurrent()) setIsComputing(false);
+      }
+    };
 
-  function fallbackCompute(
-    startCity: { lat: number; lng: number },
-    endCity: { lat: number; lng: number }
-  ) {
-    const result = findPath(
-      startCity.lat,
-      startCity.lng,
-      endCity.lat,
-      endCity.lng,
-      grid,
-      LAT_STEP,
-      LNG_STEP
-    );
-    setPath(result || []);
-    setBackendMetrics(null);
-    setBackendFlightStats(null);
-  }
+    void runCalculation();
+    return () => {
+      cancelled = true;
+      abortController.abort();
+    };
+  }, [selectedStart, selectedEnd, backendAvailable, showWeather, weatherZones, fallbackCompute, toast]);
 
   // ─── Save route ───────────────────────────────────────────────────
   const handleSaveRoute = useCallback(async () => {

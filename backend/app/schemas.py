@@ -3,20 +3,20 @@
 from __future__ import annotations
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, FiniteFloat
 
 
 # ─── Coordinate / Geometry ────────────────────────────────────────────
 
 class Coordinate(BaseModel):
-    lat: float = Field(..., ge=-90, le=90, description="Latitude in degrees")
-    lng: float = Field(..., ge=-180, le=180, description="Longitude in degrees")
+    lat: FiniteFloat = Field(..., ge=-90, le=90, description="Latitude in degrees")
+    lng: FiniteFloat = Field(..., ge=-180, le=180, description="Longitude in degrees")
 
 
 class PathWaypoint(BaseModel):
-    lat: float
-    lng: float
-    cost: float = Field(1.0, description="Traversal cost at this node")
+    lat: FiniteFloat = Field(..., ge=-90, le=90)
+    lng: FiniteFloat = Field(..., ge=-180, le=180)
+    cost: FiniteFloat = Field(1.0, ge=0, le=100, description="Traversal cost at this node")
 
 
 # ─── Environment Constraints ─────────────────────────────────────────
@@ -24,10 +24,10 @@ class PathWaypoint(BaseModel):
 class ConstraintBase(BaseModel):
     name: str
     constraint_type: str = Field(..., description="storm | no_fly_zone | terrain | dust | cyclone | turbulence")
-    center_lat: float
-    center_lng: float
-    radius: float = Field(..., description="Haversine radius on unit sphere")
-    intensity: float = Field(1.0, ge=0, le=10, description="Severity 1‑5+")
+    center_lat: FiniteFloat = Field(..., ge=-90, le=90)
+    center_lng: FiniteFloat = Field(..., ge=-180, le=180)
+    radius: FiniteFloat = Field(..., gt=0, le=3.141592653589793, description="Haversine radius on unit sphere")
+    intensity: FiniteFloat = Field(1.0, ge=0, le=10, description="Severity 1‑5+")
     is_active: bool = True
     metadata_json: Optional[dict] = None
 
@@ -45,19 +45,19 @@ class ConstraintOut(ConstraintBase):
 
 class ActiveConstraint(BaseModel):
     """A lightweight constraint sent by the frontend for path computation."""
-    lat: float
-    lng: float
-    radius: float
-    intensity: float = Field(1.0, ge=0, le=10)
-    label: Optional[str] = None
+    lat: FiniteFloat = Field(..., ge=-90, le=90)
+    lng: FiniteFloat = Field(..., ge=-180, le=180)
+    radius: FiniteFloat = Field(..., gt=0, le=3.141592653589793)
+    intensity: FiniteFloat = Field(1.0, ge=0, le=10)
+    label: Optional[str] = Field(default=None, max_length=255)
 
 
 class PathCalculateRequest(BaseModel):
     start: Coordinate
     end: Coordinate
-    constraints: list[ActiveConstraint] = Field(default_factory=list)
-    lat_step: float = Field(5.0, gt=0, le=30, description="Grid latitude step in degrees")
-    lng_step: float = Field(5.0, gt=0, le=30, description="Grid longitude step in degrees")
+    constraints: list[ActiveConstraint] = Field(default_factory=list, max_length=100)
+    lat_step: FiniteFloat = Field(5.0, ge=1.0, le=30, description="Grid latitude step in degrees")
+    lng_step: FiniteFloat = Field(5.0, ge=1.0, le=30, description="Grid longitude step in degrees")
 
 
 class ComputationMetrics(BaseModel):
@@ -106,12 +106,12 @@ class PathErrorResponse(BaseModel):
 # ─── Saved Routes ───────────────────────────────────────────────────
 
 class RouteSaveRequest(BaseModel):
-    name: Optional[str] = None
-    start_city: str
-    end_city: str
+    name: Optional[str] = Field(default=None, max_length=255)
+    start_city: str = Field(..., min_length=1, max_length=100)
+    end_city: str = Field(..., min_length=1, max_length=100)
     start: Coordinate
     end: Coordinate
-    path: list[PathWaypoint]
+    path: list[PathWaypoint] = Field(..., min_length=2, max_length=5000)
     geodesic_km: Optional[float] = None
     optimized_km: Optional[float] = None
     detour_percent: Optional[float] = None
@@ -119,7 +119,7 @@ class RouteSaveRequest(BaseModel):
     fuel_kg: Optional[float] = None
     co2_kg: Optional[float] = None
     computation_time_ms: Optional[float] = None
-    constraints_active: Optional[list[str]] = None
+    constraints_active: Optional[list[str]] = Field(default=None, max_length=100)
 
 
 class RouteSaveResponse(BaseModel):

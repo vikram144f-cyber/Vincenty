@@ -26,24 +26,28 @@ export function FlightPath({ path }: FlightPathProps) {
   useEffect(() => {
     setProgress(0);
 
-    // Rule 2: Strictly dispose of all geometries and materials to wipe the 
-    // Three.js context clean when the route state changes/unmounts,
-    // preventing any ghost paths or memory stacking.
+    const lineGeometry = lineGeomRef.current;
+    const glowGeometry = glowGeomRef.current;
+    const trailGeometry = trailGeomRef.current;
+    const markerMesh = instancedMarkersRef.current;
+    const planeMesh = planeRef.current;
+
+    // Dispose route-specific GPU resources when the route changes or unmounts.
     return () => {
-      if (lineGeomRef.current) lineGeomRef.current.dispose();
-      if (glowGeomRef.current) glowGeomRef.current.dispose();
-      if (trailGeomRef.current) trailGeomRef.current.dispose();
+      lineGeometry?.dispose();
+      glowGeometry?.dispose();
+      trailGeometry?.dispose();
       
-      if (instancedMarkersRef.current) {
-        instancedMarkersRef.current.geometry?.dispose();
-        const mat = instancedMarkersRef.current.material;
+      if (markerMesh) {
+        markerMesh.geometry?.dispose();
+        const mat = markerMesh.material;
         if (Array.isArray(mat)) mat.forEach(m => m.dispose());
         else if (mat) mat.dispose();
       }
       
-      if (planeRef.current) {
-        planeRef.current.geometry?.dispose();
-        const mat = planeRef.current.material;
+      if (planeMesh) {
+        planeMesh.geometry?.dispose();
+        const mat = planeMesh.material;
         if (Array.isArray(mat)) mat.forEach(m => m.dispose());
         else if (mat) mat.dispose();
       }
@@ -237,7 +241,14 @@ export function FlightPath({ path }: FlightPathProps) {
 
       {/* Waypoint dots as InstancedMesh (1 Draw Call instead of N objects) */}
       {markerData && markerData.pts.length > 0 && (
-        <instancedMesh ref={instancedMarkersRef} args={[null as any, null as any, markerData.pts.length]}>
+        <instancedMesh
+          ref={instancedMarkersRef}
+          args={[
+            null as unknown as THREE.BufferGeometry,
+            null as unknown as THREE.Material,
+            markerData.pts.length,
+          ]}
+        >
           <sphereGeometry args={[0.012, 8, 8]} />
           <meshBasicMaterial transparent opacity={0.8} />
         </instancedMesh>
